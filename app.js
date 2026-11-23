@@ -328,7 +328,12 @@ ${ready.length ? `<h2>🎤 Üben für den großen Tag</h2><div class="g2">
 <button class="btn big" data-a="startExam" data-ids="${ids}" data-m="arbeit" data-e="${id}">📝 Probearbeit (45 Min)</button>
 <button class="btn big sec" data-a="startExam" data-ids="${ids}" data-m="kurz" data-e="${id}">⚡ Kurztest (10 Min)</button>
 ${hasVoc ? `<button class="btn big sec" data-a="startExam" data-ids="${ids}" data-m="vokabel" data-e="${id}">🔤 Vokabeltest</button><button class="btn big sec" data-a="go" data-h="vocab">🃏 Vokabeltrainer</button>` : ''}</div>` : ''}
-<div style="margin-top:30px"><button class="btn danger sm" data-a="delExam" data-id="${id}">Termin löschen</button></div>${nav('termine')}`;
+<div class="card" style="margin-top:30px"><h3>✏️ Termin bearbeiten</h3>
+<div class="g2"><label class="f">Datum<input type="date" id="eDate" value="${e.date}"></label>
+<label class="f">Fach<select id="eSubj">${Object.entries(SUBJ).map(([k, x]) => `<option value="${k}" ${e.subject === k ? 'selected' : ''}>${x[1]} ${x[0]}</option>`).join('')}</select></label>
+<label class="f">Art<select id="eType">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${e.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+<label class="f">Titel<input id="eTitle" value="${esc(e.title)}"></label></div>
+<div class="row"><button class="btn" data-a="saveExam" data-id="${id}">Änderungen speichern</button><button class="btn danger sm" data-a="delExam" data-id="${id}">Termin löschen</button></div></div>${nav('termine')}`;
 };
 
 let NEW = { subject: '', examId: '' };
@@ -638,6 +643,23 @@ const A = {
     if (!date) return toast('Bitte ein Datum wählen');
     S.exams.push({ id: uid(), date, subject, type, title: ($('#fTitle').value || '').trim() || `${sj(subject)[0]} ${TYPES[type]}` });
     save(); toast('📅 Termin gespeichert'); render();
+  },
+  saveExam(d) {
+    const e = examById(d.id), date = $('#eDate').value; if (!e) return;
+    if (!date) return toast('Bitte ein Datum wählen');
+    e.date = date; e.subject = $('#eSubj').value; e.type = $('#eType').value;
+    e.title = ($('#eTitle').value || '').trim() || `${sj(e.subject)[0]} ${TYPES[e.type]}`;
+    save(true); toast('✅ Termin gespeichert'); render();
+  },
+  async delTopic(d) {
+    const t = topic(d.t); if (!t || !confirm(`Thema „${t.title || 'Neues Thema'}“ wirklich löschen? Fotos und Lernstoff gehen verloren.`)) return;
+    const back = t.examId && examById(t.examId) ? 'termin/' + t.examId : 'home';
+    S.topics = S.topics.filter(x => x.id !== t.id);
+    for (const p of t.photos) { PH.delete(p); try { await DB.del('p:' + p); } catch (e) { } }
+    Object.keys(S.vocab).forEach(k => { if (k.startsWith(t.id + '|')) delete S.vocab[k]; });
+    Object.keys(S.expl).forEach(k => { if (k.startsWith(t.id + ':')) delete S.expl[k]; });
+    if (CARD && CARD.tid === t.id) CARD = null;
+    save(true); toast('🗑 Thema gelöscht'); go(back);
   },
   delExam(d) { if (!confirm('Termin wirklich löschen? (Die Themen bleiben erhalten.)')) return; S.exams = S.exams.filter(e => e.id !== d.id); S.topics.forEach(t => { if (t.examId === d.id) t.examId = ''; }); save(); go('termine'); },
   linkTopic(d) { const t = topic($('#linkSel').value); if (t) { t.examId = d.id; save(); render(); } },
