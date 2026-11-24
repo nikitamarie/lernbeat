@@ -39,7 +39,7 @@ const BADGES = [
   ['level5', '⭐', 'Headliner', 'Level 5 erreicht'],
   ['back1', '📬', 'Mutig nachgeschaut', 'Erste zurückbekommene Arbeit ausgewertet'], ['reflect3', '🪞', 'Selbst-Checker', '3 Arbeiten reflektiert'],
   ['top', '🏆', 'Spitzennote', 'Eine 1 oder 2 geschrieben'], ['riser', '📈', 'Aufsteiger', 'Besser als die letzte Arbeit im selben Fach'],
-  ['prepared', '🎯', 'Gut vorbereitet', 'Vor der Arbeit mit LernBeat geübt'], ['fixer', '🔧', 'Fehler-Detektiv', 'Alle Karten im Fehler-Check gewusst']
+  ['rechenprofi', '🧮', 'Rechenprofi', '10 Rechenaufgaben mit 3 Sternen gelöst'], ['prepared', '🎯', 'Gut vorbereitet', 'Vor der Arbeit mit LernBeat geübt'], ['fixer', '🔧', 'Fehler-Detektiv', 'Alle Karten im Fehler-Check gewusst']
 ];
 const TYPES = { arbeit: 'Klassenarbeit', test: 'Test', vokabel: 'Vokabeltest' };
 const LEITNER = [0, 1, 2, 4, 7, 14];
@@ -144,7 +144,7 @@ function checkBadges(ctx = {}) {
     first_topic: S.topics.some(t => t.status === 'ready'), first_exam: S.stats.exams >= 1, good: ctx.pct >= 85, perfect: S.stats.perfect >= 1,
     streak3: S.streak.n >= 3, streak7: S.streak.n >= 7, cards50: S.stats.cards >= 50, vocab100: S.stats.vocab >= 100,
     exams5: S.stats.exams >= 5, early: !!ctx.early, level5: level(S.xp).n >= 5,
-    back1: reviewCount() >= 1, reflect3: reviewCount() >= 3, top: !!ctx.top, riser: !!ctx.riser, prepared: !!ctx.prepared, fixer: !!ctx.fixer
+    back1: reviewCount() >= 1, reflect3: reviewCount() >= 3, top: !!ctx.top, riser: !!ctx.riser, prepared: !!ctx.prepared, rechenprofi: (S.stats.stars3 || 0) >= 10, fixer: !!ctx.fixer
   };
   let q = 0; BADGES.forEach(([id, e, n]) => { if (c[id] && !S.badges[id]) { S.badges[id] = todayStr(); setTimeout(() => toast(`${e} Neues Abzeichen: ${n}!`, 3000), 900 + 1400 * q++); } });
 }
@@ -220,15 +220,16 @@ async function withLoading(msgs, fn) {
 }
 
 // ---------- Prompts ----------
+const RW_SCHEMA = '"rechenwege":[{"name":"Name der Rechenart/des Verfahrens","wann":"Wann man es benutzt (1 Satz)","schritte":["Schritt 1 …","Schritt 2 …"],"beispiel":{"aufgabe":"…","schritte":["Zeile für Zeile vorgerechnet, jede Zwischenrechnung sichtbar"],"ergebnis":"…"},"fehler":["typischer Fehler und wie man ihn vermeidet"],"merke":"Merksatz/Eselsbrücke"}]';
 function promptAnalyze(t) {
   return `Hier sind ${t.photos.length} Foto(s) von Seiten aus der Schulmappe, von Arbeitsblättern oder aus dem Schulbuch. Fach: ${sj(t.subject)[0]}.${t.title ? ' Thema: ' + t.title + '.' : ''}
 Viele Arbeitsblätter wurden von der Schülerin HANDSCHRIFTLICH ausgefüllt – lies auch die Handschrift. ACHTUNG: Ihre Eintragungen können Fehler enthalten. Übernimm nur fachlich richtige Inhalte. Wenn du Fehler in ihren Eintragungen findest, korrigiere sie im Lernstoff und liste sie unter "hinweise" auf.
 Erstelle daraus Lernmaterial. Antworte NUR mit JSON in genau diesem Format:
 {"titel":"kurzer Thementitel","volltext":"Vollständige, gut geordnete Abschrift ALLER Lerninhalte inkl. Aufgabenstellungen und (korrigierter) Lösungen als Markdown (## Überschriften, - Stichpunkte, **fett**). Das ist die Grundlage für Probearbeiten – nichts Wichtiges weglassen.","zusammenfassung":[{"ueberschrift":"…","text":"2–4 verständliche Sätze","punkte":["…"]}],"merksaetze":["…"],"glossar":[{"begriff":"…","erklaerung":"…"}],"karteikarten":[{"frage":"…","antwort":"…"}],"vokabeln":[{"en":"…","de":"…","beispiel":"kurzer englischer Beispielsatz"}],"spickzettel":"Markdown","hinweise":[{"stand":"was auf dem Blatt stand","richtig":"was richtig ist","erklaerung":"kurz warum"}],"unleserlich":"Was nicht lesbar war (oder leer)"}
-Regeln: zusammenfassung 3–8 Abschnitte; merksaetze 5–12 kurze, einprägsame Sätze; glossar alle wichtigen Fachbegriffe; karteikarten 10–25 Stück (Frage/Antwort, abwechslungsreich); vokabeln NUR wenn englische Vokabeln/Vokabellisten auf den Seiten stehen – dann ALLE vollständig übernehmen (bei Verben "to …"), sonst []; spickzettel = die wichtigsten Inhalte kompakt auf maximal einer Tablet-Seite; hinweise leer lassen, wenn nichts falsch war.`;
+Regeln: zusammenfassung 3–8 Abschnitte; merksaetze 5–12 kurze, einprägsame Sätze; glossar alle wichtigen Fachbegriffe; karteikarten 10–25 Stück (Frage/Antwort, abwechslungsreich); vokabeln NUR wenn englische Vokabeln/Vokabellisten auf den Seiten stehen – dann ALLE vollständig übernehmen (bei Verben "to …"), sonst []; spickzettel = die wichtigsten Inhalte kompakt auf maximal einer Tablet-Seite; hinweise leer lassen, wenn nichts falsch war.${t.subject === 'mathe' ? `\nZUSÄTZLICH für Mathe ein Feld ${RW_SCHEMA} – alle Rechenarten/Verfahren des Themas (2–6), jeweils kinderleicht Schritt für Schritt erklärt, mit vollständig vorgerechnetem Beispiel. Schriftliche Verfahren in Worten beschreiben (z. B. "Einer: 7 + 5 = 12 → schreibe 2, merke 1").` : ''}`;
 }
 const FACH_HINT = {
-  mathe: 'Mathe: überwiegend Rechenaufgaben (typ "zahl") inkl. Sachaufgaben, dazu wenige mc/luecke und 1–3 "frei"-Aufgaben mit "Begründe" oder "Notiere deinen Rechenweg". Zahlen so wählen, dass ohne Taschenrechner lösbar.',
+  mathe: 'Mathe: Etwa die Hälfte der Aufgaben vom typ "rechenweg" (Rechenweg aufschreiben + Ergebnis, wie in einer echten Mathearbeit), darunter Sachaufgaben. Dazu einige kurze "zahl"-Aufgaben (Kopfrechnen), wenige mc/luecke/wahrfalsch und 1–2 "frei" mit "Begründe". Zahlen so wählen, dass ohne Taschenrechner lösbar.',
   englisch: 'Englisch: Vokabeln, Grammatik als Lückentext (bei englischen Antworten Alternativen angeben, z. B. Kurzformen), kurzes Leseverstehen (kurzen englischen Text in die Frage schreiben), eine kleine Schreibaufgabe ("frei"). Arbeitsanweisungen wie in der Schule (einfaches Englisch oder Deutsch).',
   deutsch: 'Deutsch: Grammatik/Wortarten/Satzglieder, Rechtschreibung, Textverständnis (kurzen Text in die Frage schreiben), eine kurze Schreibaufgabe ("frei").'
 };
@@ -245,7 +246,7 @@ Aufgabentypen:
 {"typ":"zuordnen","frage":"Ordne richtig zu.","paare":[{"links":"…","rechts":"…"}],"punkte":3,"afb":2,"erklaerung":"…"} (3–6 Paare, rechts eindeutig)
 {"typ":"zahl","frage":"…","loesung":12.5,"einheit":"cm","toleranz":0,"punkte":2,"afb":2,"erklaerung":"…"} (genau eine Zahl als Ergebnis)
 {"typ":"frei","frage":"…","musterloesung":"…","erwartung":"was für volle Punktzahl nötig ist","punkte":4,"afb":3,"erklaerung":"…"}
-Antworte NUR mit JSON: {"titel":"…","minuten":${mode === 'kurz' ? 10 : 45},"aufgaben":[…]}
+${subj === 'mathe' ? '{"typ":"rechenweg","frage":"Berechne … Schreibe deinen Rechenweg auf.","musterweg":["Schritt 1 mit Zwischenrechnung","Schritt 2 …"],"ergebnis":"z. B. 245 cm","loesung":245,"punkte":4,"weg_punkte":2,"afb":2,"erklaerung":"…"} (loesung = Zahl des Endergebnisses oder null; weg_punkte = Punkte für den Rechenweg)\n' : ''}Antworte NUR mit JSON: {"titel":"…","minuten":${mode === 'kurz' ? 10 : 45},"aufgaben":[…]}
 
 MATERIAL:
 ${mat}`;
@@ -365,6 +366,7 @@ ${ready ? `<div class="g2"><button class="btn big" data-a="go" data-h="learn/${i
 <button class="btn big sec" data-a="startExam" data-ids="${id}" data-m="kurz">⚡ Kurztest (10 Min)</button>
 <button class="btn big sec" data-a="go" data-h="learn/${id}/cards">🃏 Karteikarten</button>
 <button class="btn big sec" data-a="go" data-h="chat/${id}">💬 Frag Beat (Erklär-Chat)</button>
+${t.subject === 'mathe' ? `<button class="btn big" data-a="go" data-h="learn/${id}/rw">🧮 Rechenwege &amp; Rechentraining</button>` : ''}
 ${hasVoc ? `<button class="btn big sec" data-a="startExam" data-ids="${id}" data-m="vokabel">🔤 Vokabeltest</button>` : ''}</div>` : ''}
 <div class="card" style="margin-top:16px"><h3>📷 Fotos (${t.photos.length})</h3>
 ${t.photos.length ? '' : '<p class="muted">Fotografiere alle Seiten zu diesem Thema (Arbeitsblätter, Hefteinträge, Buchseiten). Am besten gerade von oben, gut beleuchtet. Namen am besten abdecken.</p>'}
@@ -382,7 +384,7 @@ V.learn = (id, tab = 'sum') => {
   const t = topic(id); if (!t || !t.content) return V.home();
   const c = t.content;
   const tabs = [['sum', '📝 Zusammenfassung', c.zusammenfassung.length], ['merk', '💡 Merksätze', c.merksaetze.length], ['cards', '🃏 Karteikarten', c.karteikarten.length],
-  ['spick', '📄 Spickzettel', c.spickzettel], ['gloss', '📖 Begriffe', c.glossar.length], ['vok', '🔤 Vokabeln', c.vokabeln.length], ['hint', '🔧 Korrekturen', c.hinweise.length], ['full', '📚 Alles nachlesen', c.volltext]].filter(x => x[2]);
+  ['spick', '📄 Spickzettel', c.spickzettel], ['gloss', '📖 Begriffe', c.glossar.length], ['vok', '🔤 Vokabeln', c.vokabeln.length], ['hint', '🔧 Korrekturen', c.hinweise.length], ['full', '📚 Alles nachlesen', c.volltext], ['rw', '🧮 Rechenwege', t.subject === 'mathe']].filter(x => x[2]);
   let body = '';
   if (tab === 'sum') body = c.zusammenfassung.map((z, i) => { const k = id + ':s' + i; return `<div class="card"><h3>${esc(z.ueberschrift)}</h3>${md(z.text || '')}${(z.punkte || []).length ? '<ul>' + z.punkte.map(p => `<li>${esc(p)}</li>`).join('') + '</ul>' : ''}${S.expl[k] ? `<div class="expl">🤓 ${md(S.expl[k])}</div>` : `<button class="btn sec sm" data-a="explainSec" data-t="${id}" data-i="${i}">🤔 Erklär's mir einfacher</button>`}${S.expl[k] ? `<button class="btn sec sm" style="margin-top:10px" data-a="go" data-h="chat/${id}">💬 Weiter fragen</button>` : ''}</div>`; }).join('');
   else if (tab === 'merk') body = `<div class="card stack">${c.merksaetze.map((m, i) => `<div class="merk"><span class="n">${i + 1}</span><div>${md(m)}</div></div>`).join('')}</div>`;
@@ -390,6 +392,7 @@ V.learn = (id, tab = 'sum') => {
   else if (tab === 'gloss') body = `<div class="card">${c.glossar.map(g => `<div class="kv"><h3 style="margin:0">${esc(g.begriff)}</h3><p>${esc(g.erklaerung)}</p></div>`).join('')}</div>`;
   else if (tab === 'vok') body = `<div class="card">${c.vokabeln.map(v => `<div class="vrow"><button class="spk" data-a="speak" data-v="${esc(v.en)}">🔊</button><div class="grow"><b>${esc(v.en)}</b> – ${esc(v.de)}${v.beispiel ? `<br><small class="muted">${esc(v.beispiel)}</small>` : ''}</div></div>`).join('')}</div><button class="btn big" data-a="go" data-h="vocab">🃏 Im Vokabeltrainer üben</button>`;
   else if (tab === 'hint') body = `<p class="muted">Das stand auf deinen Blättern nicht ganz richtig – hier die Korrektur:</p>${c.hinweise.map(h => `<div class="card res part"><div class="kv"><span class="l">Auf dem Blatt</span>${esc(h.stand)}</div><div class="kv"><span class="l">Richtig ist</span><strong>${esc(h.richtig)}</strong></div><p class="muted">${esc(h.erklaerung)}</p></div>`).join('')}`;
+  else if (tab === 'rw') body = rwView(t);
   else if (tab === 'full') body = `<div class="card">${md(c.volltext)}</div>${c.unleserlich ? `<p class="muted">Nicht lesbar war: ${esc(c.unleserlich)}</p>` : ''}`;
   else if (tab === 'cards') {
     if (!CARD || CARD.tid !== id) CARD = { tid: id, order: shuffle(c.karteikarten.map((_, i) => i)), i: 0, flip: false, known: 0, again: [] };
@@ -407,6 +410,7 @@ function answered(t, a) {
   if (t.typ === 'wahrfalsch') return Array.isArray(a) && a.filter(x => x != null).length > 0;
   if (t.typ === 'luecke' || t.typ === 'zuordnen') return Array.isArray(a) && a.some(x => x && String(x).trim());
   if (t.typ === 'frei') return !!((a.text || '').trim() || a.photo);
+  if (t.typ === 'rechenweg') return !!((a.text || '').trim() || a.photo || (a.erg || '').trim());
   return String(a).trim() !== '';
 }
 function taskInput(t, a) {
@@ -415,6 +419,9 @@ function taskInput(t, a) {
   if (t.typ === 'luecke') return `<div class="gaptext">${esc(t.text).replace(/\n/g, '<br>').replace(/\{\{(\d+)\}\}/g, (m, n) => `<input class="gap" data-in="gap" data-j="${n - 1}" value="${esc(a && a[n - 1] || '')}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="(${n})">`)}</div>`;
   if (t.typ === 'zuordnen') return t.paare.map((p, j) => `<div class="pair"><b>${esc(p.links)}</b><select data-in="pair" data-j="${j}"><option value="">– wählen –</option>${t.opts.map(o => `<option ${a && a[j] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>`).join('');
   if (t.typ === 'zahl') return `<div class="row"><input data-in="val" inputmode="decimal" style="max-width:260px;font-size:1.3rem" value="${esc(a || '')}" placeholder="Ergebnis" autocomplete="off"><b style="font-size:1.2rem">${esc(t.einheit || '')}</b></div>`;
+  if (t.typ === 'rechenweg') return `<div class="kv"><span class="l">Dein Rechenweg – jeder Schritt in eine neue Zeile</span><textarea data-in="free" class="mathin" placeholder="z. B.\n1) 3 · 45 = 135\n2) 135 + 20 = 155">${esc(a && a.text || '')}</textarea></div>
+<div class="row" style="margin:10px 0"><label class="btn sec sm">📷 ${a && a.photo ? 'Foto ersetzen' : 'Oder: auf Papier rechnen & Foto machen'}<input type="file" accept="image/*" class="hide" data-ch="ansPhoto"></label>${a && a.photo ? `<img src="${a.photo}" class="photo-ans" alt="Dein Rechenweg"><button class="btn sec sm" data-a="ansPhotoDel">Foto entfernen</button>` : ''}</div>
+<div class="kv"><span class="l">Ergebnis</span><input data-in="erg" value="${esc(a && a.erg || '')}" placeholder="Antwort / Ergebnis" style="max-width:360px;font-size:1.2rem" autocomplete="off"></div>`;
   if (t.typ === 'frei') return `<textarea data-in="free" placeholder="Deine Antwort …">${esc(a && a.text || '')}</textarea>
 <div class="row" style="margin-top:10px"><label class="btn sec sm">📷 ${a && a.photo ? 'Foto ersetzen' : 'Foto deiner Lösung (optional)'}<input type="file" accept="image/*" class="hide" data-ch="ansPhoto"></label>${a && a.photo ? `<img src="${a.photo}" class="photo-ans" alt="Deine Lösung"><button class="btn sec sm" data-a="ansPhotoDel">Foto entfernen</button>` : ''}</div>`;
   if (t.typ === 'vokabel') return `<input data-in="val" value="${esc(a || '')}" placeholder="${t.dir === 'de2en' ? 'auf Englisch …' : 'auf Deutsch …'}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="font-size:1.3rem">`;
@@ -470,7 +477,7 @@ function ansText(t, a) {
   if (t.typ === 'wahrfalsch') return t.aussagen.map((s, j) => `${esc(s.text)}: <b>${a[j] === 1 ? 'wahr' : a[j] === 0 ? 'falsch' : '–'}</b>`).join('<br>');
   if (t.typ === 'luecke') return t.antworten.map((_, j) => `(${j + 1}) ${esc(a[j] || '–')}`).join(' · ');
   if (t.typ === 'zuordnen') return t.paare.map((p, j) => `${esc(p.links)} → ${esc(a[j] || '–')}`).join('<br>');
-  if (t.typ === 'frei') return esc(a.text || '').replace(/\n/g, '<br>') + (a.photo ? `<img src="${a.photo}" class="photo-ans" alt="">` : '');
+  if (t.typ === 'frei' || t.typ === 'rechenweg') return esc(a.text || '').replace(/\n/g, '<br>') + (a.photo ? `<img src="${a.photo}" class="photo-ans" alt="">` : '') + (t.typ === 'rechenweg' ? `<br><b>Ergebnis:</b> ${esc(a.erg || '–')}` : '');
   return esc(a) + (t.einheit ? ' ' + esc(t.einheit) : '');
 }
 function solText(t) {
@@ -480,6 +487,7 @@ function solText(t) {
   if (t.typ === 'zuordnen') return t.paare.map(p => `${esc(p.links)} → ${esc(p.rechts)}`).join('<br>');
   if (t.typ === 'zahl') return fmtNum(t.loesung) + ' ' + esc(t.einheit || '');
   if (t.typ === 'frei') return md(t.musterloesung || '');
+  if (t.typ === 'rechenweg') return stepsHtml(t.musterweg) + `<b>Ergebnis: ${esc(t.ergebnis || '')}</b>`;
   if (t.typ === 'vokabel') return esc(t.dir === 'de2en' ? t.en : t.de);
   return '';
 }
@@ -493,6 +501,7 @@ function cleanTasks(arr) {
     else if (t.typ === 'luecke') { const n = (String(t.text || '').match(/\{\{\d+\}\}/g) || []).length; if (!n || !Array.isArray(t.antworten) || t.antworten.length < n) continue; t.antworten = t.antworten.slice(0, n).map(x => [].concat(x).map(String)); }
     else if (t.typ === 'zuordnen') { if (!Array.isArray(t.paare) || t.paare.length < 2) continue; t.paare = t.paare.filter(p => p && p.links && p.rechts); t.opts = shuffle([...new Set(t.paare.map(p => String(p.rechts)))]); }
     else if (t.typ === 'zahl') { t.loesung = parseFloat(String(t.loesung).replace(',', '.')); if (isNaN(t.loesung)) continue; }
+    else if (t.typ === 'rechenweg') { t.musterweg = [].concat(t.musterweg || []).map(String); t.weg_punkte = clamp(+t.weg_punkte || Math.ceil(t.punkte / 2), 0, t.punkte); const l = parseFloat(String(t.loesung).replace(',', '.')); t.loesung = isNaN(l) ? null : l; if (!t.ergebnis && t.loesung != null) t.ergebnis = fmtNum(t.loesung); }
     else if (t.typ !== 'frei') continue;
     if (t.typ !== 'vokabel' && !t.frage) t.frage = t.typ === 'luecke' ? 'Ergänze die Lücken.' : t.typ === 'zuordnen' ? 'Ordne richtig zu.' : 'Aufgabe';
     out.push(t);
@@ -520,11 +529,11 @@ async function startExam(ids, mode, eid) {
 async function submitExam() {
   const R = S.run, open = R.tasks.filter((t, i) => !answered(t, R.ans[i])).length;
   if (open && !confirm(`Du hast ${open} Aufgabe${open > 1 ? 'n' : ''} noch nicht beantwortet. Trotzdem abgeben?`)) return;
-  const res = R.tasks.map((t, i) => t.typ === 'frei' ? { got: 0, max: t.punkte, st: 'no', fb: '' } : gradeLocal(t, R.ans[i]));
-  const free = R.tasks.map((t, i) => [t, i]).filter(([t, i]) => t.typ === 'frei' && answered(t, R.ans[i]));
+  const res = R.tasks.map((t, i) => t.typ === 'frei' || t.typ === 'rechenweg' ? { got: 0, max: t.punkte, st: 'no', fb: '' } : gradeLocal(t, R.ans[i]));
+  const free = R.tasks.map((t, i) => [t, i]).filter(([t, i]) => (t.typ === 'frei' || t.typ === 'rechenweg') && answered(t, R.ans[i]));
   if (free.length) {
-    const parts = [{ text: `Bewerte die folgenden Antworten einer Fünftklässlerin (Fach ${sj(R.subject)[0]}) fair und ermutigend, wie eine Lehrkraft am Gymnasium. Inhalt zählt; kleine Rechtschreibfehler nicht abziehen (außer wenn Rechtschreibung/englische Sprache Teil der Aufgabe ist). Halbe Punkte erlaubt. Antworte NUR mit JSON: {"bewertungen":[{"nr":1,"punkte":2,"feedback":"1–3 freundliche Sätze: was gut war und was gefehlt hat"}]}` }];
-    free.forEach(([t, i], k) => { const a = R.ans[i]; parts.push({ text: `\n--- Antwort Nr. ${k + 1} ---\nAufgabe: ${t.frage}\nMaximale Punkte: ${t.punkte}\nErwartung: ${t.erwartung || ''}\nMusterlösung: ${t.musterloesung || ''}\nAntwort der Schülerin: ${a.text || '(siehe Foto)'}` }); if (a.photo) { parts.push({ text: '(Foto ihrer handschriftlichen Lösung zu Nr. ' + (k + 1) + ':)' }); parts.push({ inlineData: { mimeType: 'image/jpeg', data: a.photo.split(',')[1] } }); } });
+    const parts = [{ text: `Bewerte die folgenden Antworten einer Fünftklässlerin (Fach ${sj(R.subject)[0]}) fair und ermutigend, wie eine Lehrkraft am Gymnasium. Inhalt zählt; kleine Rechtschreibfehler nicht abziehen (außer wenn Rechtschreibung/englische Sprache Teil der Aufgabe ist). Halbe Punkte erlaubt. Bei RECHENWEG-Aufgaben: Rechenweg und Ergebnis getrennt bewerten – bis zu "Weg-Punkte" für einen nachvollziehbaren, richtigen Weg, den Rest für das richtige Ergebnis (Einheit beachten). Folgefehler fair behandeln: Ist der Ansatz richtig, aber verrechnet, gibt es Weg-Punkte. Nur Ergebnis ohne Weg: höchstens die Ergebnis-Punkte. Nenne im Feedback genau den Schritt, in dem der Fehler passiert ist, und wie er richtig geht. Antworte NUR mit JSON: {"bewertungen":[{"nr":1,"punkte":2,"feedback":"1–3 freundliche Sätze: was gut war und was gefehlt hat"}]}` }];
+    free.forEach(([t, i], k) => { const a = R.ans[i]; parts.push({ text: `\n--- Antwort Nr. ${k + 1} ---\nAufgabe: ${t.frage}\nMaximale Punkte: ${t.punkte}\nErwartung: ${t.erwartung || ''}\n${t.typ === 'rechenweg' ? `Typ: RECHENWEG (Weg-Punkte: ${t.weg_punkte})\nMusterweg: ${t.musterweg.join(' | ')}\nRichtiges Ergebnis: ${t.ergebnis}\nRechenweg der Schülerin: ${a.text || (a.photo ? '(siehe Foto)' : '(keiner)')}\nErgebnis der Schülerin: ${a.erg || '(keins)'}` : `Musterlösung: ${t.musterloesung || ''}\nAntwort der Schülerin: ${a.text || '(siehe Foto)'}`}` }); if (a.photo) { parts.push({ text: '(Foto ihrer handschriftlichen Lösung zu Nr. ' + (k + 1) + ':)' }); parts.push({ inlineData: { mimeType: 'image/jpeg', data: a.photo.split(',')[1] } }); } });
     const r = await withLoading(['Ich korrigiere deine Antworten …', 'Zähle die Punkte zusammen 🎼', 'Fast fertig ✨'], () => ai(parts, { temp: 0.2 }));
     free.forEach(([t, i]) => res[i] = { got: 0, max: 0, st: 'unrated', fb: 'Konnte nicht automatisch bewertet werden – vergleiche selbst mit der Musterlösung.' });
     if (r && Array.isArray(r.bewertungen)) r.bewertungen.forEach((b, k) => { const pr = free[(+b.nr || k + 1) - 1]; if (!pr) return; const [t, i] = pr, p = half(clamp(+b.punkte || 0, 0, t.punkte)); res[i] = { got: p, max: t.punkte, st: stOf(p, t.punkte), fb: b.feedback || '' }; });
@@ -553,7 +562,7 @@ V.result = () => {
 ${R.tasks.map((t, i) => { const r = res[i], k = R.id + ':' + i; return `<div class="card res ${r.st}"><div class="row"><span class="st ${r.st}">${lbl[r.st]}</span><span class="chip">${fmtNum(r.got)} / ${fmtNum(t.punkte)} P.</span><b>Aufgabe ${i + 1}</b></div>
 <div style="margin-top:10px">${taskQ(t)}</div>
 <div class="kv"><span class="l">Deine Antwort</span>${ansText(t, R.ans[i])}</div>
-${r.st !== 'ok' ? `<div class="kv"><span class="l">${t.typ === 'frei' ? 'Musterlösung' : 'Richtig ist'}</span>${solText(t)}</div>` : ''}
+${r.st !== 'ok' ? `<div class="kv"><span class="l">${t.typ === 'frei' || t.typ === 'rechenweg' ? 'So geht\'s richtig' : 'Richtig ist'}</span>${solText(t)}</div>` : ''}
 ${r.fb ? `<div class="fb ${r.st === 'ok' ? 'ok' : r.st === 'part' ? 'near' : 'no'}">${esc(r.fb)}</div>` : ''}
 ${t.erklaerung ? `<p class="muted">💡 ${esc(t.erklaerung)}</p>` : ''}
 ${r.st !== 'ok' ? (S.expl[k] ? `<div class="expl">🤓 ${md(S.expl[k])}</div>` : `<button class="btn sec sm" data-a="explainTask" data-i="${i}">🤔 Versteh ich nicht – erklär's nochmal</button>`) : ''}</div>`; }).join('')}
@@ -637,6 +646,85 @@ karteikarten: 4–12 Stück zu genau den Inhalten, die schiefgingen (leer, wenn 
   }
   ctx.top = rv.n && rv.n <= 2;
   touchStreak(); checkBadges(ctx); save(true); confetti(); render(); scrollTo(0, 0);
+}
+
+
+// ----- Mathe: Rechenwege erklären + Rechentraining mit Rechenweg -----
+const arrS = x => Array.isArray(x) ? x.filter(Boolean).map(String) : (x ? [String(x)] : []);
+function normRW(x) {
+  return (Array.isArray(x) ? x : []).filter(v => v && v.name).map(v => ({ name: String(v.name), wann: String(v.wann || ''), schritte: arrS(v.schritte), beispiel: v.beispiel && v.beispiel.aufgabe ? { aufgabe: String(v.beispiel.aufgabe), schritte: arrS(v.beispiel.schritte), ergebnis: String(v.beispiel.ergebnis || '') } : null, fehler: arrS(v.fehler), merke: String(v.merke || '') }));
+}
+const stepsHtml = st => `<ol class="steps">${(st || []).map(x => `<li>${esc(String(x).replace(/^\s*(\d+[.)]|Schritt \d+:?)\s*/i, ''))}</li>`).join('')}</ol>`;
+function rwView(t) {
+  const rw = t.content.rechenwege || [];
+  if (!rw.length) return `<div class="card center"><div style="font-size:3rem">🧮</div><h3>Rechenwege Schritt für Schritt</h3><p class="muted">Ich erkläre dir jede Rechenart aus diesem Thema mit vorgerechnetem Beispiel und typischen Fehlern – danach kannst du mit echten Aufgaben üben.</p><button class="btn big" data-a="rwGen" data-t="${t.id}">✨ Rechenwege erklären lassen</button></div>`;
+  return `<button class="btn big" style="margin-bottom:16px" data-a="mtStart" data-t="${t.id}" data-i="all">🏋️ Gemischtes Rechentraining (5 Aufgaben)</button>
+${rw.map((v, i) => `<div class="card"><h2 style="margin-top:0">🧮 ${esc(v.name)}</h2>${v.wann ? `<p class="muted">${esc(v.wann)}</p>` : ''}
+<h3>So gehst du vor</h3>${stepsHtml(v.schritte)}
+${v.beispiel ? `<div class="example"><h3>👀 Beispiel: ${esc(v.beispiel.aufgabe)}</h3>${stepsHtml(v.beispiel.schritte)}<p><b>Ergebnis: ${esc(v.beispiel.ergebnis)}</b></p></div>` : ''}
+${v.fehler.length ? `<div class="kv"><span class="l">⚠️ Typische Fehler</span><ul>${v.fehler.map(f => `<li>${esc(f)}</li>`).join('')}</ul></div>` : ''}
+${v.merke ? `<div class="expl">💡 <b>Merke:</b> ${esc(v.merke)}</div>` : ''}
+<div class="row" style="margin-top:14px"><button class="btn" data-a="mtStart" data-t="${t.id}" data-i="${i}">🏋️ Üben: 5 Aufgaben</button><button class="btn sec" data-a="go" data-h="chat/${t.id}">💬 Frag Beat dazu</button></div></div>`).join('')}
+<button class="btn sec sm" data-a="rwGen" data-t="${t.id}">🔄 Erklärungen neu erstellen</button>`;
+}
+let MT = null;
+V.mtrain = () => {
+  if (!MT) return V.home();
+  const t = topic(MT.tid), n = MT.tasks.length;
+  if (MT.i >= n) {
+    const stars = MT.stars.reduce((s, x) => s + x, 0);
+    return `<div class="score"><div style="font-size:3rem">${stars >= n * 2.5 ? '🏆' : stars >= n * 1.5 ? '🌟' : '💪'}</div><h1>Training geschafft!</h1><div class="big">${'⭐'.repeat(Math.round(stars / n))}</div><p style="font-size:1.15rem">${stars} von ${n * 3} Sternen · +${MT.xp} XP</p></div>
+<div class="g2"><button class="btn big" data-a="mtStart" data-t="${MT.tid}" data-i="${MT.idx}">🔁 Neue Aufgaben</button><button class="btn big sec" data-a="go" data-h="learn/${MT.tid}/rw">🧮 Zu den Rechenwegen</button></div>`;
+  }
+  const q = MT.tasks[MT.i], a = MT.ans, r = MT.res;
+  return `<div class="top"><button class="back" data-a="mtStop">✕ Beenden</button><b style="flex:1">🏋️ ${esc(MT.title)}</b><span class="chip">Aufgabe ${MT.i + 1} / ${n}</span></div>
+<div class="prog"><i style="width:${MT.i / n * 100}%"></i></div>
+<div class="card"><div style="font-size:1.25rem;font-weight:700;margin-bottom:12px">${md(q.aufgabe)}</div>
+${MT.hints ? `<div class="expl">${q.tipps.slice(0, MT.hints).map((h, k) => `<p>💡 <b>Tipp ${k + 1}:</b> ${esc(h)}</p>`).join('')}</div>` : ''}
+<div class="kv"><span class="l">Dein Rechenweg – jeder Schritt in eine neue Zeile</span><textarea class="mathin" data-mt="text" placeholder="z. B.\n1) 12 · 4 = 48\n2) 48 + 7 = 55" ${r ? 'disabled' : ''}>${esc(a.text || '')}</textarea></div>
+<div class="row" style="margin:10px 0">${r ? '' : `<label class="btn sec sm">📷 ${a.photo ? 'Foto ersetzen' : 'Oder: auf Papier rechnen & Foto machen'}<input type="file" accept="image/*" class="hide" data-ch="mtPhoto"></label>`}${a.photo ? `<img src="${a.photo}" class="photo-ans" alt="Dein Rechenweg">` : ''}</div>
+<div class="kv"><span class="l">Ergebnis</span><input data-mt="erg" value="${esc(a.erg || '')}" placeholder="Ergebnis" style="max-width:360px;font-size:1.2rem" autocomplete="off" ${r ? 'disabled' : ''}></div>
+${r ? `<div class="fb ${r.sterne >= 3 ? 'ok' : r.sterne >= 1 ? 'near' : 'no'}"><div style="font-size:1.5rem">${'⭐'.repeat(r.sterne)}${'☆'.repeat(3 - r.sterne)}</div>${esc(r.feedback)}${r.fehler_schritt ? `<p>🔍 <b>Hier ist es passiert:</b> ${esc(r.fehler_schritt)}</p>` : ''}${r.korrektur ? `<p>✏️ <b>So geht der Schritt richtig:</b> ${esc(r.korrektur)}</p>` : ''}</div>
+<details class="card" style="margin-top:14px" ${r.sterne < 3 ? 'open' : ''}><summary><b>👀 So rechnet man es richtig</b></summary>${stepsHtml(q.musterweg)}<p><b>Ergebnis: ${esc(q.ergebnis)}</b></p></details>
+<button class="btn big" data-a="mtNext">${MT.i < n - 1 ? 'Nächste Aufgabe ›' : 'Fertig 🎉'}</button>`
+      : `<div class="g2" style="margin-top:14px"><button class="btn big sec" data-a="mtHint" ${MT.hints >= q.tipps.length ? 'disabled' : ''}>💡 Tipp${q.tipps.length ? ` (${q.tipps.length - MT.hints} übrig)` : ''}</button><button class="btn big" data-a="mtCheck">✅ Prüfen</button></div>`}</div>
+${r ? '' : `<p class="muted center">Wichtig ist der Weg! Für jeden richtigen Schritt gibt's Sterne – auch wenn du dich am Ende verrechnest.</p>`}`;
+};
+async function mtStart(tid, idx) {
+  const t = topic(tid), rw = t.content.rechenwege || [], v = idx === 'all' ? null : rw[+idx];
+  const what = v ? `zum Rechenverfahren „${v.name}“ (So geht's: ${v.schritte.join(' / ')})` : `gemischt zu diesen Rechenarten: ${rw.map(x => x.name).join(', ') || t.title}`;
+  const r = await withLoading(['Ich suche passende Aufgaben aus … 🧮', 'Stimme die Schwierigkeit ab 🎚️'], () => ai([{ text: `Erstelle 5 Übungsaufgaben ${what} für eine Schülerin der 5. Klasse Gymnasium (Niedersachsen), passend zum Thema „${t.title}“. Von leicht nach schwer, Aufgabe 4 und 5 als kurze Sachaufgaben aus dem Alltag (gern Musik, Tanzen, Schule). Zahlen ohne Taschenrechner lösbar. Keine LaTeX-Formeln.
+Antworte NUR mit JSON: {"aufgaben":[{"aufgabe":"…","tipps":["kleiner Denkanstoß","größerer Tipp, aber nicht die Lösung"],"musterweg":["Schritt 1 mit Zwischenrechnung","Schritt 2 …"],"ergebnis":"Endergebnis mit Einheit"}]}
+
+MATERIAL ZUM THEMA:
+${(t.content.volltext || '').slice(0, 8000)}` }], { temp: 0.8 }));
+  if (!r) return;
+  const tasks = (Array.isArray(r.aufgaben) ? r.aufgaben : []).filter(x => x && x.aufgabe && x.ergebnis).map(x => ({ aufgabe: String(x.aufgabe), tipps: arrS(x.tipps), musterweg: arrS(x.musterweg), ergebnis: String(x.ergebnis) }));
+  if (!tasks.length) return modal('<h3>😕 Das hat nicht geklappt</h3><p>Bitte nochmal versuchen.</p>');
+  MT = { tid, idx, title: v ? v.name : 'Gemischtes Training', tasks, i: 0, ans: {}, hints: 0, res: null, stars: [], xp: 0 };
+  go('mtrain');
+}
+async function mtCheck() {
+  const q = MT.tasks[MT.i], a = MT.ans;
+  if (!(a.text || '').trim() && !a.photo) return toast('Schreib zuerst deinen Rechenweg auf ✍️ (oder mach ein Foto)');
+  if (!(a.erg || '').trim()) return toast('Trag noch dein Ergebnis ein');
+  const parts = [{ text: `Prüfe die Lösung einer Fünftklässlerin – freundlich, genau und ermutigend.
+Aufgabe: ${q.aufgabe}
+Musterweg: ${q.musterweg.join(' | ')}
+Richtiges Ergebnis: ${q.ergebnis}
+Rechenweg der Schülerin: ${a.text || '(siehe Foto)'}
+Ergebnis der Schülerin: ${a.erg}
+Bewerte Rechenweg UND Ergebnis. Andere richtige Lösungswege sind genauso gut. Finde den ersten fehlerhaften Schritt, falls es einen gibt.
+sterne: 3 = Weg und Ergebnis richtig; 2 = Weg richtig, aber kleiner Rechen-/Flüchtigkeitsfehler oder Einheit fehlt; 1 = Ansatz/Idee richtig, aber deutliche Fehler; 0 = Weg passt nicht.
+Antworte NUR mit JSON: {"sterne":0,"feedback":"1–3 freundliche Sätze (was gut war, was fehlt)","fehler_schritt":"welcher Schritt falsch ist (sonst leer)","korrektur":"wie genau dieser Schritt richtig geht (sonst leer)"}` }];
+  if (a.photo) parts.push({ inlineData: { mimeType: 'image/jpeg', data: a.photo.split(',')[1] } });
+  const r = await withLoading(['Ich schaue mir deinen Rechenweg an … 🔍'], () => ai(parts, { temp: 0.2 }));
+  if (!r) return;
+  const st = clamp(Math.round(+r.sterne || 0), 0, 3);
+  MT.res = { sterne: st, feedback: String(r.feedback || ''), fehler_schritt: String(r.fehler_schritt || ''), korrektur: String(r.korrektur || '') };
+  MT.stars.push(st); const xp = st * 3; MT.xp += xp; S.xp += xp;
+  if (st === 3) { S.stats.stars3 = (S.stats.stars3 || 0) + 1; }
+  touchStreak(); checkBadges(); save(); render();
 }
 
 // ----- Vokabeltrainer -----
@@ -792,6 +880,22 @@ const A = {
   async rvDel(d) { if (!confirm('Foto löschen?')) return; const rv = rvOf(examById(d.e)); rv.photos = rv.photos.filter(p => p !== d.p); PH.delete(d.p); await DB.del('p:' + d.p); save(); render(); },
   rvSubmit: d => submitReview(d.e),
   rvRedo(d) { const rv = rvOf(examById(d.e)); rv.ai = null; save(); render(); },
+  async rwGen(d) {
+    const t = topic(d.t);
+    const r = await withLoading(['Ich erkläre dir die Rechenwege … 🧮', 'Rechne Beispiele vor ✍️', 'Sammle typische Fehler ⚠️'], () => ai([{ text: `Erkläre die Rechenarten/Rechenverfahren aus diesem Mathe-Thema („${t.title}“, 5. Klasse Gymnasium Niedersachsen) kinderleicht Schritt für Schritt – jeweils mit vollständig vorgerechnetem Beispiel (jede Zwischenrechnung sichtbar) und typischen Fehlern. Schriftliche Verfahren in Worten beschreiben (z. B. "Einer: 7 + 5 = 12 → schreibe 2, merke 1"). 2–6 Verfahren, nur was zum Thema gehört.
+Antworte NUR mit JSON: {${RW_SCHEMA}}
+
+MATERIAL:
+${(t.content.volltext || '').slice(0, 30000)}` }], { temp: 0.3 }));
+    if (!r) return; const rw = normRW(r.rechenwege);
+    if (!rw.length) return modal('<h3>😕 Das hat nicht geklappt</h3><p>Bitte nochmal versuchen.</p>');
+    t.content.rechenwege = rw; save(true); render();
+  },
+  mtStart: d => mtStart(d.t, d.i),
+  mtHint() { MT.hints++; render(); },
+  mtCheck: () => mtCheck(),
+  mtNext() { MT.i++; MT.ans = {}; MT.hints = 0; MT.res = null; if (MT.i >= MT.tasks.length) { S.xp += 10; MT.xp += 10; toast(`+${MT.xp} XP ✨`); checkBadges(); save(); } render(); scrollTo(0, 0); },
+  mtStop() { if (MT.i < MT.tasks.length && !confirm('Training beenden?')) return; const id = MT.tid; MT = null; go('learn/' + id + '/rw'); },
   saveExam(d) {
     const e = examById(d.id), date = $('#eDate').value; if (!e) return;
     if (!date) return toast('Bitte ein Datum wählen');
@@ -827,7 +931,7 @@ const A = {
     const r = await withLoading(['Ich lese deine Seiten … 👀', 'Entziffere die Handschrift ✍️', 'Sortiere die Merksätze 💡', 'Baue Karteikarten 🃏', 'Schreibe den Spickzettel 📄'], () => ai(parts, { temp: 0.2 }));
     if (!r) return;
     const arr = x => Array.isArray(x) ? x.filter(Boolean) : [];
-    t.content = { volltext: r.volltext || '', zusammenfassung: arr(r.zusammenfassung), merksaetze: arr(r.merksaetze).map(String), glossar: arr(r.glossar).filter(g => g.begriff), karteikarten: arr(r.karteikarten).filter(k => k.frage && k.antwort), vokabeln: arr(r.vokabeln).filter(v => v.en && v.de), spickzettel: r.spickzettel || '', hinweise: arr(r.hinweise).filter(h => h.richtig), unleserlich: r.unleserlich || '' };
+    t.content = { volltext: r.volltext || '', zusammenfassung: arr(r.zusammenfassung), merksaetze: arr(r.merksaetze).map(String), glossar: arr(r.glossar).filter(g => g.begriff), karteikarten: arr(r.karteikarten).filter(k => k.frage && k.antwort), vokabeln: arr(r.vokabeln).filter(v => v.en && v.de), spickzettel: r.spickzettel || '', hinweise: arr(r.hinweise).filter(h => h.richtig), unleserlich: r.unleserlich || '', rechenwege: normRW(r.rechenwege) };
     if (!t.title) t.title = r.titel || 'Thema';
     const first = t.status !== 'ready'; t.status = 'ready'; t.dirty = false; CARD = null;
     save(true); if (first) addXP(20); touchStreak(); checkBadges();
@@ -887,6 +991,7 @@ const CH = {
     await withLoading(['Bereite die Fotos vor … 📸'], async () => { for (const f of files) { const d = await resize(f), id = uid(); await DB.set('p:' + id, d); PH.set(id, d); rv.photos.push(id); } });
     save(true); render();
   },
+  async mtPhoto(el) { const f = el.files[0]; if (!f || !MT) return; MT.ans.photo = await resize(f, 1400); render(); },
   setTopicExam(el) { topic(el.dataset.t).examId = el.value; save(); },
   setTopicTitle(el) { topic(el.dataset.t).title = el.value.trim(); save(); },
   setOpt(el) { S[el.dataset.k] = el.checked; save(); },
@@ -907,11 +1012,13 @@ document.addEventListener('click', e => { const el = e.target.closest('[data-a]'
 document.addEventListener('change', e => { const el = e.target.closest('[data-ch]'); if (el && CH[el.dataset.ch]) CH[el.dataset.ch](el); });
 document.addEventListener('input', e => {
   const el = e.target;
+  if (el.dataset.mt && MT) { MT.ans[el.dataset.mt] = el.value; return; }
   if (el.dataset.rv) { const x = examById(el.dataset.e); if (x) { rvOf(x)[el.dataset.rv] = el.value; save(); } return; }
   const k = el.dataset.in; if (!k || !S.run) return;
   const R = S.run; let a = R.ans[R.i];
   if (k === 'gap' || k === 'pair') { a = Array.isArray(a) ? a : []; a[+el.dataset.j] = el.value; }
   else if (k === 'free') a = { ...(a || {}), text: el.value };
+  else if (k === 'erg') a = { ...(a || {}), erg: el.value };
   else a = el.value;
   R.ans[R.i] = a; save();
 });
