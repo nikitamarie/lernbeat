@@ -590,30 +590,22 @@ ${a.naechstes_mal.length ? `<div class="card"><h3>🚀 Dein Plan fürs nächste 
 ${(rv.bonus || []).length ? `<div class="card"><h3>✨ Deine Bonus-XP</h3>${rv.bonus.map(b => `<div class="vrow"><div class="grow">${esc(b[0])}</div><b>+${b[1]} XP</b></div>`).join('')}</div>` : ''}
 <div class="g2">${rv.fixTopic && topic(rv.fixTopic) ? `<button class="btn big" data-a="go" data-h="learn/${rv.fixTopic}/cards">🔧 Fehler-Check üben</button>` : ''}
 <button class="btn big sec" data-a="go" data-h="termin/${eid}">Zurück zum Termin</button></div>
-<button class="btn sec sm" style="margin-top:14px" data-a="rvRedo" data-e="${eid}">✏️ Angaben ändern &amp; neu auswerten</button>${nav('termine')}`;
+<button class="btn sec sm" style="margin-top:14px" data-a="rvRedo" data-e="${eid}">🔄 Fotos ändern &amp; neu auswerten</button>${nav('termine')}`;
   }
   return `${back('termin/' + eid, esc(e.title))}<h1>📬 Arbeit zurück: ${s[1]} ${esc(e.title)}</h1>
-<div class="card tip"><b>Egal wie's gelaufen ist:</b> Fürs Hinschauen und Nachdenken gibt's <b>Bonus-XP</b> und vielleicht neue Abzeichen. Aus deinen Fehlern baue ich dir einen <b>Fehler-Check</b> zum Üben. 💪</div>
-<div class="card"><h3>1. Fotos der Arbeit</h3><p class="muted">Alle Seiten mit den Korrekturen der Lehrkraft. Den Namen am besten abdecken.</p>
+<div class="card tip"><b>Egal wie's gelaufen ist:</b> Fürs Hochladen gibt's <b>Bonus-XP</b> und vielleicht neue Abzeichen. Aus deinen Fehlern baue ich dir einen <b>Fehler-Check</b> zum Üben. 💪</div>
+<div class="card"><h3>📸 Fotos der Arbeit</h3><p class="muted">Einfach alle Seiten mit den Korrekturen fotografieren, den Rest macht die App. Den Namen am besten abdecken.</p>
 <div class="thumbs">${rv.photos.map(p => `<div class="thumb"><img data-pid="${p}" alt="Foto"><div class="tb"><button data-a="rvRot" data-e="${eid}" data-p="${p}">↻</button><button data-a="rvDel" data-e="${eid}" data-p="${p}">🗑</button></div></div>`).join('')}</div>
 <label class="btn ${rv.photos.length ? 'sec' : ''} full">📸 Fotos hinzufügen<input type="file" accept="image/*" multiple class="hide" data-ch="rvPhotos" data-e="${eid}"></label></div>
-<div class="card"><h3>2. Deine Note</h3><div class="seg">${['1', '2', '3', '4', '5', '6'].map(n => `<button class="${rv.note === n ? 'sel' : ''}" data-a="rvSet" data-e="${eid}" data-k="note" data-v="${n}">${n}</button>`).join('')}</div>
-<div class="seg" style="margin-top:10px">${[['+', 'mit +'], ['', 'glatt'], ['-', 'mit –']].map(([k, l]) => `<button class="${rv.tend === k ? 'sel' : ''}" data-a="rvSet" data-e="${eid}" data-k="tend" data-v="${k}">${l}</button>`).join('')}<button class="${rv.note === '' ? 'sel' : ''}" data-a="rvSet" data-e="${eid}" data-k="note" data-v="">Steht auf dem Foto</button></div></div>
-<div class="card"><h3>3. Wie fühlst du dich damit?</h3><div class="av-grid">${MOODS.map(([m, l]) => `<button class="td ${rv.mood === m ? 'sel' : ''}" data-a="rvSet" data-e="${eid}" data-k="mood" data-v="${m}"><span style="font-size:1.8rem">${m}</span>${l}</button>`).join('')}</div></div>
-<div class="card"><h3>4. Kurz nachgedacht</h3>
-<label class="f">Was lief gut? 🌟<textarea data-rv="good" data-e="${eid}" style="min-height:90px" placeholder="z. B. Die Karte konnte ich gut beschriften">${esc(rv.good)}</textarea></label>
-<label class="f">Was war schwierig? 🤔<textarea data-rv="hard" data-e="${eid}" style="min-height:90px" placeholder="z. B. Bei Aufgabe 3 wusste ich nicht, was gemeint ist">${esc(rv.hard)}</textarea></label>
-<h3>Wie hast du gelernt?</h3><div class="chips">${METHODS.map(m => `<button class="${rv.methods.includes(m) ? 'sel' : ''}" data-a="rvMethod" data-e="${eid}" data-v="${esc(m)}">${m}</button>`).join('')}</div>
-${ps.n ? `<p class="muted">In LernBeat geübt: <b>${ps.n} Probearbeit${ps.n > 1 ? 'en/Tests' : '/Test'}</b> mit durchschnittlich <b>${ps.avg} %</b>.</p>` : ''}</div>
-<button class="btn big" data-a="rvSubmit" data-e="${eid}">✨ Auswerten &amp; Bonus holen</button>${nav('termine')}`;
+${rv.photos.length ? `<button class="btn big" data-a="rvSubmit" data-e="${eid}">✨ Auswerten &amp; Bonus holen</button>` : ''}${nav('termine')}`;
 };
 async function submitReview(eid) {
   const e = examById(eid), rv = rvOf(e), ps = prepStats(e);
-  if (!rv.photos.length && !rv.note) return toast('Lade Fotos hoch oder tippe deine Note an');
+  if (!rv.photos.length) return toast('Bitte zuerst die Arbeit fotografieren 📸');
   const ts = topicsFor(eid);
   const parts = [{ text: `${rv.photos.length ? `Hier sind ${rv.photos.length} Foto(s) einer korrigierten, zurückgegebenen` : 'Es geht um eine zurückgegebene'} Klassenarbeit bzw. einen Test: „${e.title}“, Fach ${sj(e.subject)[0]}, 5. Klasse Gymnasium Niedersachsen.${ts.length ? ' Themen: ' + ts.map(t => t.title).join(', ') + '.' : ''}
-Angaben der Schülerin (11 Jahre): Note: ${rv.note ? rv.note + rv.tend : 'bitte vom Foto ablesen'}. Gefühl: ${rv.mood || 'keine Angabe'}. Was lief gut: ${rv.good || '–'}. Was war schwierig: ${rv.hard || '–'}. So hat sie gelernt: ${rv.methods.join(', ') || '–'}. ${ps.n ? `In der Lern-App hat sie vorher ${ps.n} Probearbeiten/Tests geübt (Ø ${ps.avg} %).` : ''}
-Aufgabe: Reflektiere die Arbeit mit ihr – wertschätzend, ehrlich, konkret und motivierend, wie eine gute Lerncoachin. Keine Abwertung, keine Vergleiche mit anderen. Lob muss konkret und echt sein (was sie wirklich richtig gemacht hat). Fehler als Lernchance formulieren. Wenn sie sich schlecht fühlt, nimm das ernst und mach Mut. Lies Korrekturen und Randbemerkungen der Lehrkraft mit.
+Die Note bitte vom Foto ablesen. ${ps.n ? `In der Lern-App hat sie vorher ${ps.n} Probearbeiten/Tests geübt (Ø ${ps.avg} %).` : ''}
+Aufgabe: Reflektiere die Arbeit mit ihr – wertschätzend, ehrlich, konkret und motivierend, wie eine gute Lerncoachin. Keine Abwertung, keine Vergleiche mit anderen. Lob muss konkret und echt sein (was sie wirklich richtig gemacht hat). Fehler als Lernchance formulieren. Ist die Note nicht so gut, mach besonders Mut. Lies Korrekturen und Randbemerkungen der Lehrkraft mit.
 Antworte NUR als JSON:
 {"note_erkannt":"Note laut Foto, z. B. 2- (sonst leer)","punkte":"z. B. 34 von 40 Punkten (sonst leer)","lob":"1–2 Sätze","staerken":["…"],"fehler":[{"thema":"Aufgabe/Thema","was":"was nicht gestimmt hat","richtig":"wie es richtig ist","tipp":"wie man es sich merkt"}],"resuemee":"3–5 Sätze persönliches Fazit in Du-Form","naechstes_mal":["3 konkrete Lerntipps fürs nächste Mal"],"karteikarten":[{"frage":"…","antwort":"…"}],"merksaetze":["…"],"vokabeln":[{"en":"…","de":"…","beispiel":"…"}]}
 karteikarten: 4–12 Stück zu genau den Inhalten, die schiefgingen (leer, wenn alles richtig war). vokabeln: nur bei Englisch die falsch gemachten Vokabeln, sonst [].` }];
@@ -622,7 +614,7 @@ karteikarten: 4–12 Stück zu genau den Inhalten, die schiefgingen (leer, wenn 
   if (!r) return;
   const arr = x => Array.isArray(x) ? x.filter(Boolean) : [];
   rv.ai = { lob: r.lob || '', punkte: r.punkte || '', resuemee: r.resuemee || '', staerken: arr(r.staerken).map(String), fehler: arr(r.fehler).filter(f => f.was), naechstes_mal: arr(r.naechstes_mal).map(String) };
-  rv.noteFinal = rv.note ? rv.note + rv.tend : String(r.note_erkannt || '').trim();
+  rv.noteFinal = String(r.note_erkannt || '').trim();
   const n = parseInt(rv.noteFinal, 10); rv.n = n >= 1 && n <= 6 ? n : null;
   // Fehler-Check als eigenes Thema (nutzt Karteikarten, Kurztest, Frag Beat, Vokabeltrainer)
   const cards = arr(r.karteikarten).filter(k => k.frage && k.antwort), voc = arr(r.vokabeln).filter(v => v.en && v.de);
@@ -635,8 +627,7 @@ karteikarten: 4–12 Stück zu genau den Inhalten, die schiefgingen (leer, wenn 
   }
   let ctx = { prepared: ps.n > 0 };
   if (!rv.xpGiven) {
-    const b = [['📬 Mut-Bonus: Arbeit angeschaut & hochgeladen', 30]];
-    if ((rv.good + rv.hard).trim().length >= 10 || rv.methods.length) b.push(['🪞 Reflexions-Bonus: nachgedacht, was gut lief', 20]);
+    const b = [['📬 Mut-Bonus: Arbeit angeschaut & hochgeladen', 40], ['🪞 Reflexions-Bonus: Fehler angeschaut', 10]];
     if (rv.n) b.push(rv.n === 1 ? ['🏆 Note 1 – Wahnsinn!', 40] : rv.n === 2 ? ['🌟 Note 2 – richtig stark!', 30] : rv.n === 3 ? ['👍 Note 3 – solide Leistung!', 20] : ['💪 Durchhalte-Bonus: Dranbleiben zahlt sich aus!', 15]);
     const prev = S.exams.filter(x => x.id !== eid && x.subject === e.subject && x.review && x.review.n && x.date < e.date).sort((a, c) => a.date < c.date ? 1 : -1)[0];
     if (prev && rv.n && rv.n < prev.review.n) { b.push([`📈 Aufsteiger-Bonus: besser als letztes Mal (${prev.review.noteFinal})`, 30]); ctx.riser = true; }
