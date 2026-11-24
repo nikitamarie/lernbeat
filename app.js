@@ -164,31 +164,55 @@ function parseJSON(t) {
   if (a >= 0 && b > a) { try { return JSON.parse(s.slice(a, b + 1)); } catch (e) { } }
   throw new Error('Die Antwort der KI war unvollständig. Bitte nochmal versuchen.');
 }
+// Streaming-Aufruf: hält die Verbindung bei langen Antworten offen (vermeidet Abbrüche in Safari)
+async function callModel(m, body) {
+  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 240000);
+  let r;
+  try { r = await fetch(`${API}/${m}:streamGenerateContent?alt=sse`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.apiKey }, body, signal: ctl.signal }); }
+  catch (e) { clearTimeout(to); throw new Error(e.name === 'AbortError' ? 'TIMEOUT' : 'OFFLINE:' + e.message); }
+  if (!r.ok) { clearTimeout(to); return { status: r.status, err: await r.text().catch(() => '') }; }
+  let txt = '', fin = '', block = '', buf = '';
+  const take = line => {
+    line = line.trim(); if (!line.startsWith('data:')) return;
+    let d; try { d = JSON.parse(line.slice(5)); } catch (e) { return; }
+    if (d.promptFeedback && d.promptFeedback.blockReason) block = d.promptFeedback.blockReason;
+    const c = d.candidates && d.candidates[0];
+    if (c) { if (c.finishReason) fin = c.finishReason; ((c.content && c.content.parts) || []).forEach(p => { if (!p.thought && p.text) txt += p.text; }); }
+  };
+  try {
+    const rd = r.body.getReader(), dec = new TextDecoder();
+    for (;;) { const { done, value } = await rd.read(); if (done) break; buf += dec.decode(value, { stream: true }); let k; while ((k = buf.indexOf('\n')) >= 0) { take(buf.slice(0, k)); buf = buf.slice(k + 1); } }
+    take(buf);
+  } catch (e) { throw new Error(e.name === 'AbortError' ? 'TIMEOUT' : 'OFFLINE:' + e.message); }
+  finally { clearTimeout(to); }
+  return { status: 200, txt, fin, block };
+}
+function unwrap(o) {
+  if (!Array.isArray(o)) return o;
+  if (o.length === 1 && o[0] && typeof o[0] === 'object' && !o[0].typ) return o[0];
+  return { aufgaben: o, rechenwege: o, bewertungen: o };
+}
 async function ai(parts, { json = true, temp = 0.4, sys = SYS, contents = null, safety = null } = {}) {
   if (!S.apiKey) throw new Error('NOKEY');
   if (!navigator.onLine) throw new Error('OFFLINE');
   const cands = [...new Set([S.model, ...(S.models || []), ...FALLBACK].filter(Boolean))];
+  const body = JSON.stringify({ systemInstruction: { parts: [{ text: sys }] }, contents: contents || [{ role: 'user', parts }], ...(safety ? { safetySettings: safety } : {}), generationConfig: { temperature: temp, responseMimeType: json ? 'application/json' : 'text/plain' } });
   let last = '';
   for (const m of cands) {
-    let r;
-    try {
-      r = await fetch(`${API}/${m}:generateContent`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': S.apiKey },
-        body: JSON.stringify({ systemInstruction: { parts: [{ text: sys }] }, contents: contents || [{ role: 'user', parts }], ...(safety ? { safetySettings: safety } : {}), generationConfig: { temperature: temp, responseMimeType: json ? 'application/json' : 'text/plain' } })
-      });
-    } catch (e) { throw new Error('OFFLINE'); }
-    if (r.ok) {
-      const d = await r.json(), c = d.candidates && d.candidates[0];
-      if ((d.promptFeedback && d.promptFeedback.blockReason) || (c && /SAFETY|PROHIBITED|BLOCKLIST|SPII/.test(c.finishReason || ''))) throw new Error('BLOCKED');
-      const txt = c && c.content && (c.content.parts || []).filter(p => !p.thought).map(p => p.text || '').join('');
-      if (!txt) { last = 'Die KI hat keine Antwort geliefert (' + (c ? c.finishReason : 'leer') + ').'; continue; }
+    const res = await callModel(m, body);
+    if (res.status === 200) {
+      if (res.block || /SAFETY|PROHIBITED|BLOCKLIST|SPII|RECITATION/.test(res.fin)) { last = 'BLOCKED:' + (res.block || res.fin); continue; }
+      if (!res.txt.trim()) { last = 'EMPTY:' + (res.fin || 'leer'); continue; }
+      let out;
+      if (json) { try { out = unwrap(parseJSON(res.txt)); } catch (e) { last = 'PARSE:' + (res.fin || '') + ' (' + res.txt.length + ' Zeichen)'; continue; } }
+      else out = res.txt.trim();
       if (m !== S.model) { S.model = m; save(); }
-      return json ? parseJSON(txt) : txt.trim();
+      return out;
     }
-    const body = await r.text();
-    if ((r.status === 400 || r.status === 403) && /api key|API_KEY|permission/i.test(body)) throw new Error('Der KI-Schlüssel funktioniert nicht. Bitte in ⚙️ Mehr prüfen.');
-    last = r.status === 429 ? 'QUOTA' : `Fehler ${r.status}`;
-    if (![404, 429, 500, 503, 504].includes(r.status) && r.status !== 400) break;
+    if ((res.status === 400 || res.status === 403) && /api key|API_KEY|permission/i.test(res.err)) throw new Error('Der KI-Schlüssel funktioniert nicht. Bitte in ⚙️ Mehr prüfen.');
+    let gm = ''; try { gm = JSON.parse(res.err).error.message; } catch (e) { gm = String(res.err).slice(0, 160); }
+    last = res.status === 429 ? 'QUOTA' : `HTTP ${res.status}: ${gm}`;
+    if (![400, 404, 429, 500, 503, 504].includes(res.status)) break;
   }
   throw new Error(last || 'Unbekannter Fehler');
 }
@@ -205,11 +229,14 @@ async function discoverModels(key) {
   return out.length ? out : FALLBACK;
 }
 function errMsg(e) {
-  const m = e && e.message || String(e);
+  const m = e && e.message || String(e), tech = x => `${x}<p class="muted" style="font-size:.8rem;margin-top:12px">Technischer Hinweis: ${esc(m)}</p>`;
   if (m === 'NOKEY') return ['Die KI ist noch nicht eingerichtet. Bitte den kostenlosen KI-Schlüssel unter ⚙️ <b>Mehr</b> eintragen.', `<button class="btn sec" data-a="go" data-h="settings">Zu den Einstellungen</button>`];
-  if (m === 'OFFLINE') return ['Keine Verbindung zur KI. Ist das Tablet mit dem Internet verbunden?', ''];
+  if (m.startsWith('OFFLINE')) return [tech('Keine Verbindung zur KI. Ist das Tablet mit dem Internet verbunden? Bei vielen Fotos auf einmal hilft es auch, es mit weniger Seiten zu versuchen.'), ''];
   if (m === 'QUOTA') return ['Das kostenlose KI-Kontingent ist gerade kurz ausgeschöpft. Bitte 1–2 Minuten warten und nochmal versuchen. (Falls das Tageslimit erreicht ist, geht es morgen früh wieder.)', ''];
-  return [esc(m), ''];
+  if (m === 'TIMEOUT') return [tech('Die KI hat zu lange gebraucht. Bitte nochmal versuchen – am besten mit weniger Fotos auf einmal (z. B. 3–4 Seiten).'), ''];
+  if (m.startsWith('BLOCKED')) return [tech('Die KI hat die Fotos abgelehnt – meistens wegen <b>persönlicher Daten</b> auf dem Bild (Name, Unterschrift, Adresse). Bitte diese Stellen abdecken (z. B. mit einem Zettel), neu fotografieren und nochmal versuchen.'), ''];
+  if (m.startsWith('PARSE') || m.startsWith('EMPTY')) return [tech('Die Antwort der KI war unvollständig. Bitte nochmal versuchen – bei vielen Seiten am besten mit weniger Fotos auf einmal.'), ''];
+  return [tech('Da ist etwas schiefgelaufen. Bitte nochmal versuchen.'), ''];
 }
 async function withLoading(msgs, fn) {
   const ov = $('#load'); let k = 0;
@@ -519,7 +546,7 @@ async function startExam(ids, mode, eid) {
   } else {
     const r = await withLoading(['Ich stelle deine Prüfung zusammen …', 'Mische die Aufgaben 🎛️', 'Stimme die Schwierigkeit ab 🎚️', 'Gleich geht\'s los 🎤'], () => ai([{ text: promptExam(ts, mode) }], { temp: 0.8 }));
     if (!r) return;
-    tasks = cleanTasks(r.aufgaben);
+    tasks = cleanTasks(r.aufgaben || r);
     if (tasks.length < 3) return modal('<h3>😕 Das hat nicht geklappt</h3><p>Die KI hat keine brauchbaren Aufgaben geliefert. Bitte nochmal versuchen.</p>');
     title = (mode === 'kurz' ? '⚡ ' : '📝 ') + (r.titel || sj(ts[0].subject)[0]); min = mode === 'kurz' ? 10 : clamp(+r.minuten || 45, 20, 90);
   }
@@ -605,10 +632,10 @@ async function submitReview(eid) {
   const ts = topicsFor(eid);
   const parts = [{ text: `${rv.photos.length ? `Hier sind ${rv.photos.length} Foto(s) einer korrigierten, zurückgegebenen` : 'Es geht um eine zurückgegebene'} Klassenarbeit bzw. einen Test: „${e.title}“, Fach ${sj(e.subject)[0]}, 5. Klasse Gymnasium Niedersachsen.${ts.length ? ' Themen: ' + ts.map(t => t.title).join(', ') + '.' : ''}
 Die Note bitte vom Foto ablesen. ${ps.n ? `In der Lern-App hat sie vorher ${ps.n} Probearbeiten/Tests geübt (Ø ${ps.avg} %).` : ''}
-Aufgabe: Reflektiere die Arbeit mit ihr – wertschätzend, ehrlich, konkret und motivierend, wie eine gute Lerncoachin. Keine Abwertung, keine Vergleiche mit anderen. Lob muss konkret und echt sein (was sie wirklich richtig gemacht hat). Fehler als Lernchance formulieren. Ist die Note nicht so gut, mach besonders Mut. Lies Korrekturen und Randbemerkungen der Lehrkraft mit.
+Aufgabe: Reflektiere die Arbeit mit ihr – wertschätzend, ehrlich, konkret und motivierend, wie eine gute Lerncoachin. Keine Abwertung, keine Vergleiche mit anderen. Lob muss konkret und echt sein (was sie wirklich richtig gemacht hat). Fehler als Lernchance formulieren. Ist die Note nicht so gut, mach besonders Mut. Lies Korrekturen und Randbemerkungen der Lehrkraft mit. Nenne und übernimm keine Namen, Unterschriften oder sonstigen persönlichen Daten – es geht nur um den fachlichen Inhalt.
 Antworte NUR als JSON:
 {"note_erkannt":"Note laut Foto, z. B. 2- (sonst leer)","punkte":"z. B. 34 von 40 Punkten (sonst leer)","lob":"1–2 Sätze","staerken":["…"],"fehler":[{"thema":"Aufgabe/Thema","was":"was nicht gestimmt hat","richtig":"wie es richtig ist","tipp":"wie man es sich merkt"}],"resuemee":"3–5 Sätze persönliches Fazit in Du-Form","naechstes_mal":["3 konkrete Lerntipps fürs nächste Mal"],"karteikarten":[{"frage":"…","antwort":"…"}],"merksaetze":["…"],"vokabeln":[{"en":"…","de":"…","beispiel":"…"}]}
-karteikarten: 4–12 Stück zu genau den Inhalten, die schiefgingen (leer, wenn alles richtig war). vokabeln: nur bei Englisch die falsch gemachten Vokabeln, sonst [].` }];
+karteikarten: 4–8 Stück zu genau den Inhalten, die schiefgingen (leer, wenn alles richtig war). vokabeln: nur bei Englisch die falsch gemachten Vokabeln, sonst [].` }];
   for (const id of rv.photos) { const p = await getPhoto(id); if (p) parts.push({ inlineData: { mimeType: 'image/jpeg', data: p.split(',')[1] } }); }
   const r = await withLoading(['Ich schaue mir deine Arbeit an … 👀', 'Lese die Korrekturen ✍️', 'Suche deine Stärken 💪', 'Baue deinen Fehler-Check 🔧', 'Schreibe dein Resümee 🎬'], () => ai(parts, { temp: 0.4 }));
   if (!r) return;
@@ -784,7 +811,7 @@ async function chatAsk(tid, q) {
     else if (r.thema_passt === false) log.push({ r: 'bot', off: 1, x: `Da kann ich dir leider nicht helfen 🙈 Ich bin nur für **${t.title}** da. Frag mich zum Beispiel, was ein Begriff bedeutet, oder lass dir etwas einfacher erklären!` });
     else log.push({ r: 'bot', x: String(r.antwort || '…') });
   } catch (e) {
-    if (e.message === 'BLOCKED') { S.chatN++; log.push({ r: 'bot', off: 1, x: 'Dazu sage ich nichts 🙂 Lass uns beim Thema bleiben!' }); }
+    if (String(e.message).startsWith('BLOCKED')) { S.chatN++; log.push({ r: 'bot', off: 1, x: 'Dazu sage ich nichts 🙂 Lass uns beim Thema bleiben!' }); }
     else { log.pop(); log.push({ r: 'bot', err: 1, x: errMsg(e)[0].replace(/<[^>]+>/g, '') }); }
   } finally { CHAT_BUSY = false; save(); render(); }
 }
