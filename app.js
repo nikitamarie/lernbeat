@@ -36,7 +36,10 @@ const BADGES = [
   ['streak3', '🔥', 'Im Takt', '3 Tage in Folge gelernt'], ['streak7', '🎶', 'Eine Woche Groove', '7 Tage in Folge gelernt'],
   ['cards50', '🃏', 'Kartenprofi', '50 Karteikarten gewusst'], ['vocab100', '👑', 'Vokabel-Queen', '100 Vokabeln richtig'],
   ['exams5', '🚌', 'Auf Tour', '5 Prüfungen geschafft'], ['early', '⏰', 'Früh dran', 'Probearbeit mind. 2 Tage vor dem Termin'],
-  ['level5', '⭐', 'Headliner', 'Level 5 erreicht']
+  ['level5', '⭐', 'Headliner', 'Level 5 erreicht'],
+  ['back1', '📬', 'Mutig nachgeschaut', 'Erste zurückbekommene Arbeit ausgewertet'], ['reflect3', '🪞', 'Selbst-Checker', '3 Arbeiten reflektiert'],
+  ['top', '🏆', 'Spitzennote', 'Eine 1 oder 2 geschrieben'], ['riser', '📈', 'Aufsteiger', 'Besser als die letzte Arbeit im selben Fach'],
+  ['prepared', '🎯', 'Gut vorbereitet', 'Vor der Arbeit mit LernBeat geübt'], ['fixer', '🔧', 'Fehler-Detektiv', 'Alle Karten im Fehler-Check gewusst']
 ];
 const TYPES = { arbeit: 'Klassenarbeit', test: 'Test', vokabel: 'Vokabeltest' };
 const LEITNER = [0, 1, 2, 4, 7, 14];
@@ -70,6 +73,7 @@ async function getPhoto(id) { if (!PH.has(id)) PH.set(id, await DB.get('p:' + id
 const topic = id => S.topics.find(t => t.id === id);
 const examById = id => S.exams.find(e => e.id === id);
 const upcoming = () => S.exams.filter(e => daysUntil(e.date) >= 0).sort((a, b) => a.date < b.date ? -1 : 1);
+const reviewCount = () => S.exams.filter(e => e.review && e.review.ai).length;
 const topicsFor = eid => S.topics.filter(t => t.examId === eid);
 
 // ---------- UI-Grundlagen ----------
@@ -139,9 +143,10 @@ function checkBadges(ctx = {}) {
   const c = {
     first_topic: S.topics.some(t => t.status === 'ready'), first_exam: S.stats.exams >= 1, good: ctx.pct >= 85, perfect: S.stats.perfect >= 1,
     streak3: S.streak.n >= 3, streak7: S.streak.n >= 7, cards50: S.stats.cards >= 50, vocab100: S.stats.vocab >= 100,
-    exams5: S.stats.exams >= 5, early: !!ctx.early, level5: level(S.xp).n >= 5
+    exams5: S.stats.exams >= 5, early: !!ctx.early, level5: level(S.xp).n >= 5,
+    back1: reviewCount() >= 1, reflect3: reviewCount() >= 3, top: !!ctx.top, riser: !!ctx.riser, prepared: !!ctx.prepared, fixer: !!ctx.fixer
   };
-  BADGES.forEach(([id, e, n]) => { if (c[id] && !S.badges[id]) { S.badges[id] = todayStr(); setTimeout(() => toast(`${e} Neues Abzeichen: ${n}!`, 3500), 900); } });
+  let q = 0; BADGES.forEach(([id, e, n]) => { if (c[id] && !S.badges[id]) { S.badges[id] = todayStr(); setTimeout(() => toast(`${e} Neues Abzeichen: ${n}!`, 3000), 900 + 1400 * q++); } });
 }
 function confetti() {
   const box = document.createElement('div'); box.className = 'confetti';
@@ -295,7 +300,7 @@ V.home = () => {
 <div class="hero"><div class="av">${S.avatar}</div><div class="grow"><h1>Hey ${esc(S.name || 'du')}!</h1>
 <div><span class="pill">⭐ Level ${L.n} · ${L.title}</span><span class="pill">🔥 ${sn} ${sn === 1 ? 'Tag' : 'Tage'}</span>${S.streak.jokers ? '<span class="pill">🛡️ Joker</span>' : ''}</div>
 <div class="xp"><i style="width:${L.pct}%"></i></div><small>${S.xp % XP_PER_LEVEL} / ${XP_PER_LEVEL} XP bis Level ${L.n + 1}</small></div></div>
-${install}${tip}
+${install}${(() => { const pe = S.exams.filter(x => daysUntil(x.date) < 0 && daysUntil(x.date) >= -45 && !(x.review && x.review.ai)).sort((a, b) => a.date < b.date ? 1 : -1)[0]; return pe ? `<div class="card tip" data-a="go" data-h="back/${pe.id}"><b>📬 ${esc(pe.title)} schon zurück?</b><p>Lade die Arbeit hoch und hol dir Bonus-XP, egal welche Note! 💪</p></div>` : ''; })()}${tip}
 <div class="g2"><button class="btn big" data-a="go" data-h="new">📸 Neues Thema fotografieren</button><button class="btn big sec" data-a="go" data-h="vocab">🃏 Vokabeltrainer</button></div>
 <h2>📅 Nächste Prüfungen</h2>${up.slice(0, 4).map(examCard).join('') || '<p class="muted">Keine Termine eingetragen.</p>'}
 <button class="btn sec sm" data-a="go" data-h="termine">Alle Termine / neuen Termin eintragen</button>
@@ -329,6 +334,7 @@ ${ready.length ? `<h2>🎤 Üben für den großen Tag</h2><div class="g2">
 <button class="btn big" data-a="startExam" data-ids="${ids}" data-m="arbeit" data-e="${id}">📝 Probearbeit (45 Min)</button>
 <button class="btn big sec" data-a="startExam" data-ids="${ids}" data-m="kurz" data-e="${id}">⚡ Kurztest (10 Min)</button>
 ${hasVoc ? `<button class="btn big sec" data-a="startExam" data-ids="${ids}" data-m="vokabel" data-e="${id}">🔤 Vokabeltest</button><button class="btn big sec" data-a="go" data-h="vocab">🃏 Vokabeltrainer</button>` : ''}</div>` : ''}
+${daysUntil(e.date) <= 0 ? (e.review && e.review.ai ? `<button class="btn big" style="margin-top:16px" data-a="go" data-h="back/${id}">📬 Deine Auswertung ansehen${e.review.noteFinal ? ' (Note ' + esc(e.review.noteFinal) + ')' : ''}</button>` : `<div class="card tip" style="margin-top:16px"><h3>📬 Arbeit schon zurückbekommen?</h3><p>Lade sie hoch, denk kurz drüber nach und hol dir <b>Bonus-XP</b>, egal welche Note!</p><button class="btn" data-a="go" data-h="back/${id}">Arbeit hochladen</button></div>`) : ''}
 <div class="card" style="margin-top:30px"><h3>✏️ Termin bearbeiten</h3>
 <div class="g2"><label class="f">Datum<input type="date" id="eDate" value="${e.date}"></label>
 <label class="f">Fach<select id="eSubj">${Object.entries(SUBJ).map(([k, x]) => `<option value="${k}" ${e.subject === k ? 'selected' : ''}>${x[1]} ${x[0]}</option>`).join('')}</select></label>
@@ -554,6 +560,85 @@ ${r.st !== 'ok' ? (S.expl[k] ? `<div class="expl">🤓 ${md(S.expl[k])}</div>` :
 <button class="btn big" data-a="go" data-h="home">🏠 Zur Startseite</button>`;
 };
 
+
+// ----- Arbeit zurückbekommen: Upload, Reflexion, Resümee, Bonus-XP -----
+const MOODS = [['😄', 'Super'], ['🙂', 'Gut'], ['😐', 'Geht so'], ['😕', 'Nicht so'], ['😢', 'Doof']];
+const METHODS = ['📝 Probearbeit', '⚡ Kurztest', '🃏 Karteikarten', '📄 Spickzettel', '💬 Frag Beat', '🔤 Vokabeltrainer', '📖 Heft/Buch gelesen', '👪 Mit jemandem geübt'];
+const rvOf = e => (e.review = e.review || { photos: [], note: '', tend: '', mood: '', good: '', hard: '', methods: [] });
+function prepStats(e) { const r = topicsFor(e.id).flatMap(t => (t.results || []).filter(x => x.d <= e.date)); return { n: r.length, avg: r.length ? Math.round(r.reduce((s, x) => s + x.pct, 0) / r.length) : null }; }
+V.back = eid => {
+  const e = examById(eid); if (!e) return V.home();
+  const rv = rvOf(e), s = sj(e.subject), ps = prepStats(e);
+  if (rv.ai) {
+    const a = rv.ai;
+    return `${back('termin/' + eid, esc(e.title))}
+<div class="score"><div style="font-size:3rem">${rv.mood || '📬'}</div><h1 style="margin:.2em 0">${s[1]} ${esc(e.title)}</h1>${rv.noteFinal ? `<div class="big">Note ${esc(rv.noteFinal)}</div>` : ''}${a.punkte ? `<p style="font-size:1.1rem">${esc(a.punkte)}</p>` : ''}<p style="font-size:1.15rem">+${rv.xp || 0} XP Bonus 🎉</p></div>
+${a.lob ? `<div class="card tip"><h3>🌟 Das hast du richtig gut gemacht</h3>${md(a.lob)}</div>` : ''}
+<div class="card"><h3>🎬 Dein Resümee</h3>${md(a.resuemee || '')}</div>
+${a.staerken.length ? `<div class="card res ok"><h3>💪 Deine Stärken</h3><ul>${a.staerken.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+${a.fehler.length ? `<div class="card res no"><h3>🔍 Daraus lernst du</h3>${a.fehler.map(f => `<div class="kv"><span class="l">${esc(f.thema || 'Aufgabe')}</span>${esc(f.was)}<br><b>Richtig:</b> ${esc(f.richtig || '')}${f.tipp ? `<br><span class="muted">💡 ${esc(f.tipp)}</span>` : ''}</div>`).join('')}</div>` : ''}
+${a.naechstes_mal.length ? `<div class="card"><h3>🚀 Dein Plan fürs nächste Mal</h3><ol>${a.naechstes_mal.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>` : ''}
+${(rv.bonus || []).length ? `<div class="card"><h3>✨ Deine Bonus-XP</h3>${rv.bonus.map(b => `<div class="vrow"><div class="grow">${esc(b[0])}</div><b>+${b[1]} XP</b></div>`).join('')}</div>` : ''}
+<div class="g2">${rv.fixTopic && topic(rv.fixTopic) ? `<button class="btn big" data-a="go" data-h="learn/${rv.fixTopic}/cards">🔧 Fehler-Check üben</button>` : ''}
+<button class="btn big sec" data-a="go" data-h="termin/${eid}">Zurück zum Termin</button></div>
+<button class="btn sec sm" style="margin-top:14px" data-a="rvRedo" data-e="${eid}">✏️ Angaben ändern &amp; neu auswerten</button>${nav('termine')}`;
+  }
+  return `${back('termin/' + eid, esc(e.title))}<h1>📬 Arbeit zurück: ${s[1]} ${esc(e.title)}</h1>
+<div class="card tip"><b>Egal wie's gelaufen ist:</b> Fürs Hinschauen und Nachdenken gibt's <b>Bonus-XP</b> und vielleicht neue Abzeichen. Aus deinen Fehlern baue ich dir einen <b>Fehler-Check</b> zum Üben. 💪</div>
+<div class="card"><h3>1. Fotos der Arbeit</h3><p class="muted">Alle Seiten mit den Korrekturen der Lehrkraft. Den Namen am besten abdecken.</p>
+<div class="thumbs">${rv.photos.map(p => `<div class="thumb"><img data-pid="${p}" alt="Foto"><div class="tb"><button data-a="rvRot" data-e="${eid}" data-p="${p}">↻</button><button data-a="rvDel" data-e="${eid}" data-p="${p}">🗑</button></div></div>`).join('')}</div>
+<label class="btn ${rv.photos.length ? 'sec' : ''} full">📸 Fotos hinzufügen<input type="file" accept="image/*" multiple class="hide" data-ch="rvPhotos" data-e="${eid}"></label></div>
+<div class="card"><h3>2. Deine Note</h3><div class="seg">${['1', '2', '3', '4', '5', '6'].map(n => `<button class="${rv.note === n ? 'sel' : ''}" data-a="rvSet" data-e="${eid}" data-k="note" data-v="${n}">${n}</button>`).join('')}</div>
+<div class="seg" style="margin-top:10px">${[['+', 'mit +'], ['', 'glatt'], ['-', 'mit –']].map(([k, l]) => `<button class="${rv.tend === k ? 'sel' : ''}" data-a="rvSet" data-e="${eid}" data-k="tend" data-v="${k}">${l}</button>`).join('')}<button class="${rv.note === '' ? 'sel' : ''}" data-a="rvSet" data-e="${eid}" data-k="note" data-v="">Steht auf dem Foto</button></div></div>
+<div class="card"><h3>3. Wie fühlst du dich damit?</h3><div class="av-grid">${MOODS.map(([m, l]) => `<button class="td ${rv.mood === m ? 'sel' : ''}" data-a="rvSet" data-e="${eid}" data-k="mood" data-v="${m}"><span style="font-size:1.8rem">${m}</span>${l}</button>`).join('')}</div></div>
+<div class="card"><h3>4. Kurz nachgedacht</h3>
+<label class="f">Was lief gut? 🌟<textarea data-rv="good" data-e="${eid}" style="min-height:90px" placeholder="z. B. Die Karte konnte ich gut beschriften">${esc(rv.good)}</textarea></label>
+<label class="f">Was war schwierig? 🤔<textarea data-rv="hard" data-e="${eid}" style="min-height:90px" placeholder="z. B. Bei Aufgabe 3 wusste ich nicht, was gemeint ist">${esc(rv.hard)}</textarea></label>
+<h3>Wie hast du gelernt?</h3><div class="chips">${METHODS.map(m => `<button class="${rv.methods.includes(m) ? 'sel' : ''}" data-a="rvMethod" data-e="${eid}" data-v="${esc(m)}">${m}</button>`).join('')}</div>
+${ps.n ? `<p class="muted">In LernBeat geübt: <b>${ps.n} Probearbeit${ps.n > 1 ? 'en/Tests' : '/Test'}</b> mit durchschnittlich <b>${ps.avg} %</b>.</p>` : ''}</div>
+<button class="btn big" data-a="rvSubmit" data-e="${eid}">✨ Auswerten &amp; Bonus holen</button>${nav('termine')}`;
+};
+async function submitReview(eid) {
+  const e = examById(eid), rv = rvOf(e), ps = prepStats(e);
+  if (!rv.photos.length && !rv.note) return toast('Lade Fotos hoch oder tippe deine Note an');
+  const ts = topicsFor(eid);
+  const parts = [{ text: `${rv.photos.length ? `Hier sind ${rv.photos.length} Foto(s) einer korrigierten, zurückgegebenen` : 'Es geht um eine zurückgegebene'} Klassenarbeit bzw. einen Test: „${e.title}“, Fach ${sj(e.subject)[0]}, 5. Klasse Gymnasium Niedersachsen.${ts.length ? ' Themen: ' + ts.map(t => t.title).join(', ') + '.' : ''}
+Angaben der Schülerin (11 Jahre): Note: ${rv.note ? rv.note + rv.tend : 'bitte vom Foto ablesen'}. Gefühl: ${rv.mood || 'keine Angabe'}. Was lief gut: ${rv.good || '–'}. Was war schwierig: ${rv.hard || '–'}. So hat sie gelernt: ${rv.methods.join(', ') || '–'}. ${ps.n ? `In der Lern-App hat sie vorher ${ps.n} Probearbeiten/Tests geübt (Ø ${ps.avg} %).` : ''}
+Aufgabe: Reflektiere die Arbeit mit ihr – wertschätzend, ehrlich, konkret und motivierend, wie eine gute Lerncoachin. Keine Abwertung, keine Vergleiche mit anderen. Lob muss konkret und echt sein (was sie wirklich richtig gemacht hat). Fehler als Lernchance formulieren. Wenn sie sich schlecht fühlt, nimm das ernst und mach Mut. Lies Korrekturen und Randbemerkungen der Lehrkraft mit.
+Antworte NUR als JSON:
+{"note_erkannt":"Note laut Foto, z. B. 2- (sonst leer)","punkte":"z. B. 34 von 40 Punkten (sonst leer)","lob":"1–2 Sätze","staerken":["…"],"fehler":[{"thema":"Aufgabe/Thema","was":"was nicht gestimmt hat","richtig":"wie es richtig ist","tipp":"wie man es sich merkt"}],"resuemee":"3–5 Sätze persönliches Fazit in Du-Form","naechstes_mal":["3 konkrete Lerntipps fürs nächste Mal"],"karteikarten":[{"frage":"…","antwort":"…"}],"merksaetze":["…"],"vokabeln":[{"en":"…","de":"…","beispiel":"…"}]}
+karteikarten: 4–12 Stück zu genau den Inhalten, die schiefgingen (leer, wenn alles richtig war). vokabeln: nur bei Englisch die falsch gemachten Vokabeln, sonst [].` }];
+  for (const id of rv.photos) { const p = await getPhoto(id); if (p) parts.push({ inlineData: { mimeType: 'image/jpeg', data: p.split(',')[1] } }); }
+  const r = await withLoading(['Ich schaue mir deine Arbeit an … 👀', 'Lese die Korrekturen ✍️', 'Suche deine Stärken 💪', 'Baue deinen Fehler-Check 🔧', 'Schreibe dein Resümee 🎬'], () => ai(parts, { temp: 0.4 }));
+  if (!r) return;
+  const arr = x => Array.isArray(x) ? x.filter(Boolean) : [];
+  rv.ai = { lob: r.lob || '', punkte: r.punkte || '', resuemee: r.resuemee || '', staerken: arr(r.staerken).map(String), fehler: arr(r.fehler).filter(f => f.was), naechstes_mal: arr(r.naechstes_mal).map(String) };
+  rv.noteFinal = rv.note ? rv.note + rv.tend : String(r.note_erkannt || '').trim();
+  const n = parseInt(rv.noteFinal, 10); rv.n = n >= 1 && n <= 6 ? n : null;
+  // Fehler-Check als eigenes Thema (nutzt Karteikarten, Kurztest, Frag Beat, Vokabeltrainer)
+  const cards = arr(r.karteikarten).filter(k => k.frage && k.antwort), voc = arr(r.vokabeln).filter(v => v.en && v.de);
+  if (cards.length || rv.ai.fehler.length || voc.length) {
+    let ft = rv.fixTopic && topic(rv.fixTopic);
+    if (!ft) { ft = { id: uid(), subject: e.subject, title: 'Fehler-Check: ' + e.title, examId: '', photos: [], status: 'ready', fix: 1, results: [], created: todayStr() }; S.topics.push(ft); rv.fixTopic = ft.id; }
+    const F = rv.ai.fehler;
+    ft.content = { volltext: F.map(f => `## ${f.thema || 'Aufgabe'}\n- So war's: ${f.was}\n- Richtig: ${f.richtig || ''}\n- Tipp: ${f.tipp || ''}`).join('\n\n'), zusammenfassung: F.map(f => ({ ueberschrift: f.thema || 'Aufgabe', text: `**Richtig ist:** ${f.richtig || ''}`, punkte: [f.tipp].filter(Boolean) })), merksaetze: arr(r.merksaetze).map(String), glossar: [], karteikarten: cards, vokabeln: voc, spickzettel: '## Dein Plan fürs nächste Mal\n' + rv.ai.naechstes_mal.map(x => '- ' + x).join('\n'), hinweise: [], unleserlich: '' };
+    if (CARD && CARD.tid === ft.id) CARD = null;
+  }
+  let ctx = { prepared: ps.n > 0 };
+  if (!rv.xpGiven) {
+    const b = [['📬 Mut-Bonus: Arbeit angeschaut & hochgeladen', 30]];
+    if ((rv.good + rv.hard).trim().length >= 10 || rv.methods.length) b.push(['🪞 Reflexions-Bonus: nachgedacht, was gut lief', 20]);
+    if (rv.n) b.push(rv.n === 1 ? ['🏆 Note 1 – Wahnsinn!', 40] : rv.n === 2 ? ['🌟 Note 2 – richtig stark!', 30] : rv.n === 3 ? ['👍 Note 3 – solide Leistung!', 20] : ['💪 Durchhalte-Bonus: Dranbleiben zahlt sich aus!', 15]);
+    const prev = S.exams.filter(x => x.id !== eid && x.subject === e.subject && x.review && x.review.n && x.date < e.date).sort((a, c) => a.date < c.date ? 1 : -1)[0];
+    if (prev && rv.n && rv.n < prev.review.n) { b.push([`📈 Aufsteiger-Bonus: besser als letztes Mal (${prev.review.noteFinal})`, 30]); ctx.riser = true; }
+    if (ps.n) b.push([`🎯 Vorbereitungs-Bonus: ${ps.n}× mit LernBeat geübt`, 15]);
+    rv.bonus = b; rv.xp = b.reduce((s, x) => s + x[1], 0); rv.xpGiven = true; rv.date = todayStr();
+    addXP(rv.xp);
+  }
+  ctx.top = rv.n && rv.n <= 2;
+  touchStreak(); checkBadges(ctx); save(true); confetti(); render(); scrollTo(0, 0);
+}
+
 // ----- Vokabeltrainer -----
 let VT = null;
 function allVocab(tid) { const out = []; S.topics.filter(t => t.content && (!tid || t.id === tid)).forEach(t => t.content.vokabeln.forEach(v => { if (v.en && v.de) out.push({ ...v, key: t.id + '|' + v.en }); })); return out; }
@@ -642,6 +727,7 @@ V.badges = () => {
   return `<h1>🏆 Deine Erfolge</h1>
 <div class="hero"><div class="av">${S.avatar}</div><div class="grow"><h1>Level ${L.n}: ${L.title}</h1><div class="xp"><i style="width:${L.pct}%"></i></div><small>${S.xp} XP insgesamt · nächster Titel: ${LEVELS[Math.min(L.n, LEVELS.length - 1)]}</small></div></div>
 <div class="grid"><div class="card center"><div style="font-size:2rem;font-weight:900">🔥 ${streakNow()}</div>Tage in Folge</div><div class="card center"><div style="font-size:2rem;font-weight:900">${S.stats.exams}</div>Prüfungen geübt</div><div class="card center"><div style="font-size:2rem;font-weight:900">${S.stats.vocab}</div>Vokabeln richtig</div><div class="card center"><div style="font-size:2rem;font-weight:900">${S.stats.cards}</div>Karten gewusst</div></div>
+${S.exams.some(x => x.review && x.review.ai) ? `<h2>📬 Deine zurückbekommenen Arbeiten</h2>${S.exams.filter(x => x.review && x.review.ai).sort((a, b) => a.date < b.date ? 1 : -1).map(x => `<button class="ecard" style="--c:${sj(x.subject)[2]}" data-a="go" data-h="back/${x.id}"><span class="em">${sj(x.subject)[1]}</span><span class="grow"><b>${esc(x.title)}</b><small>${fmtDate(x.date)} · ${x.review.mood || ''} +${x.review.xp || 0} XP</small></span><span class="cd">${x.review.noteFinal ? 'Note ' + esc(x.review.noteFinal) : ''}</span></button>`).join('')}` : ''}
 <h2>Abzeichen</h2><div class="grid">${BADGES.map(([id, e, n, d]) => `<div class="card badge ${S.badges[id] ? '' : 'lock'}"><div class="em">${e}</div><b>${n}</b><p class="muted" style="font-size:.85rem">${d}</p></div>`).join('')}</div>
 <p class="muted">🛡️ Joker: Jede Woche bekommst du einen Joker. Verpasst du einen Tag, rettet er automatisch deine Serie.</p>${nav('badges')}`;
 };
@@ -700,6 +786,12 @@ const A = {
   chatSend(d) { const i = $('#cin'); const q = i ? i.value : ''; chatAsk(d.t, q); },
   chatChip(d) { chatAsk(d.t, d.q.replace(/^\S+\s/, '')); },
   chatClear(d) { if (!confirm('Chat leeren?')) return; delete S.chats[d.t]; save(); render(); },
+  rvSet(d) { const rv = rvOf(examById(d.e)); rv[d.k] = rv[d.k] === d.v && d.k !== 'note' ? '' : d.v; save(); render(); },
+  rvMethod(d) { const rv = rvOf(examById(d.e)); rv.methods = rv.methods.includes(d.v) ? rv.methods.filter(m => m !== d.v) : [...rv.methods, d.v]; save(); render(); },
+  async rvRot(d) { const n = await rotateData(await getPhoto(d.p)); PH.set(d.p, n); await DB.set('p:' + d.p, n); render(); },
+  async rvDel(d) { if (!confirm('Foto löschen?')) return; const rv = rvOf(examById(d.e)); rv.photos = rv.photos.filter(p => p !== d.p); PH.delete(d.p); await DB.del('p:' + d.p); save(); render(); },
+  rvSubmit: d => submitReview(d.e),
+  rvRedo(d) { const rv = rvOf(examById(d.e)); rv.ai = null; save(); render(); },
   saveExam(d) {
     const e = examById(d.id), date = $('#eDate').value; if (!e) return;
     if (!date) return toast('Bitte ein Datum wählen');
@@ -718,7 +810,7 @@ const A = {
     delete S.chats[t.id];
     save(true); toast('🗑 Thema gelöscht'); go(back);
   },
-  delExam(d) { if (!confirm('Termin wirklich löschen? (Die Themen bleiben erhalten.)')) return; S.exams = S.exams.filter(e => e.id !== d.id); S.topics.forEach(t => { if (t.examId === d.id) t.examId = ''; }); save(); go('termine'); },
+  delExam(d) { if (!confirm('Termin wirklich löschen? (Die Themen bleiben erhalten.)')) return; const ex = examById(d.id); ((ex && ex.review && ex.review.photos) || []).forEach(p => { PH.delete(p); DB.del('p:' + p).catch(() => { }); }); S.exams = S.exams.filter(e => e.id !== d.id); S.topics.forEach(t => { if (t.examId === d.id) t.examId = ''; }); save(); go('termine'); },
   linkTopic(d) { const t = topic($('#linkSel').value); if (t) { t.examId = d.id; save(); render(); } },
   pickSubj(d) { NEW.subject = d.s; const ti = $('#nTitle') ? $('#nTitle').value : ''; const e = examById(NEW.examId); if (e && e.subject !== d.s) NEW.examId = ''; if (!NEW.examId) { const m = upcoming().find(x => x.subject === d.s); if (m) NEW.examId = m.id; } render(); if (ti) $('#nTitle').value = ti; },
   createTopic() {
@@ -752,7 +844,7 @@ const A = {
     if (r) { S.expl[R.id + ':' + d.i] = r; save(); render(); }
   },
   flip() { CARD.flip = !CARD.flip; const el = $('.flash'); if (el) { el.classList.toggle('f', CARD.flip); if (CARD.flip) setTimeout(render, 350); else render(); } },
-  cardRate(d) { if (d.v === '1') { CARD.known++; S.stats.cards++; S.xp += 2; touchStreak(); checkBadges(); } else CARD.again.push(CARD.order[CARD.i]); CARD.i++; CARD.flip = false; if (CARD.i >= CARD.order.length && CARD.known) toast(`+${CARD.known * 2} XP ✨`); save(); render(); },
+  cardRate(d) { if (d.v === '1') { CARD.known++; S.stats.cards++; S.xp += 2; touchStreak(); checkBadges(); } else CARD.again.push(CARD.order[CARD.i]); CARD.i++; CARD.flip = false; if (CARD.i >= CARD.order.length && CARD.known) { toast(`+${CARD.known * 2} XP ✨`); const ft = topic(CARD.tid); if (ft && ft.fix && CARD.known === CARD.order.length) checkBadges({ fixer: true }); } save(); render(); },
   cardsAgain() { CARD = { ...CARD, order: shuffle(CARD.again), i: 0, flip: false, known: 0, again: [] }; render(); },
   cardsRestart() { CARD = null; render(); },
   speak: d => speak(d.v),
@@ -790,6 +882,11 @@ const CH = {
     await withLoading(['Bereite die Fotos vor … 📸'], async () => { for (const f of files) { const d = await resize(f), id = uid(); await DB.set('p:' + id, d); PH.set(id, d); t.photos.push(id); } });
     t.dirty = true; save(true); render();
   },
+  async rvPhotos(el) {
+    const rv = rvOf(examById(el.dataset.e)), files = [...el.files]; if (!files.length) return;
+    await withLoading(['Bereite die Fotos vor … 📸'], async () => { for (const f of files) { const d = await resize(f), id = uid(); await DB.set('p:' + id, d); PH.set(id, d); rv.photos.push(id); } });
+    save(true); render();
+  },
   setTopicExam(el) { topic(el.dataset.t).examId = el.value; save(); },
   setTopicTitle(el) { topic(el.dataset.t).title = el.value.trim(); save(); },
   setOpt(el) { S[el.dataset.k] = el.checked; save(); },
@@ -809,7 +906,9 @@ const CH = {
 document.addEventListener('click', e => { const el = e.target.closest('[data-a]'); if (!el || el.disabled) return; e.preventDefault(); const f = A[el.dataset.a]; if (f) f(el.dataset, el); });
 document.addEventListener('change', e => { const el = e.target.closest('[data-ch]'); if (el && CH[el.dataset.ch]) CH[el.dataset.ch](el); });
 document.addEventListener('input', e => {
-  const el = e.target, k = el.dataset.in; if (!k || !S.run) return;
+  const el = e.target;
+  if (el.dataset.rv) { const x = examById(el.dataset.e); if (x) { rvOf(x)[el.dataset.rv] = el.value; save(); } return; }
+  const k = el.dataset.in; if (!k || !S.run) return;
   const R = S.run; let a = R.ans[R.i];
   if (k === 'gap' || k === 'pair') { a = Array.isArray(a) ? a : []; a[+el.dataset.j] = el.value; }
   else if (k === 'free') a = { ...(a || {}), text: el.value };
