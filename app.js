@@ -328,7 +328,7 @@ V.home = () => {
 <div class="hero"><div class="av">${S.avatar}</div><div class="grow"><h1>Hey ${esc(S.name || 'du')}!</h1>
 <div><span class="pill">⭐ Level ${L.n} · ${L.title}</span><span class="pill">🔥 ${sn} ${sn === 1 ? 'Tag' : 'Tage'}</span>${S.streak.jokers ? '<span class="pill">🛡️ Joker</span>' : ''}</div>
 <div class="xp"><i style="width:${L.pct}%"></i></div><small>${S.xp % XP_PER_LEVEL} / ${XP_PER_LEVEL} XP bis Level ${L.n + 1}</small></div></div>
-${install}${(() => { const pe = S.exams.filter(x => daysUntil(x.date) < 0 && daysUntil(x.date) >= -45 && !(x.review && x.review.ai)).sort((a, b) => a.date < b.date ? 1 : -1)[0]; return pe ? `<div class="card tip" data-a="go" data-h="back/${pe.id}"><b>📬 ${esc(pe.title)} schon zurück?</b><p>Lade die Arbeit hoch und hol dir Bonus-XP, egal welche Note! 💪</p></div>` : ''; })()}${tip}
+${install}${S.sheet && !S.sheet.result && topic(S.sheet.tid) ? `<div class="card tip" data-a="go" data-h="sheet"><b>📄 Dein Aufgabenblatt wartet!</b><p>${S.sheet.photos.length ? 'Fotos sind da – jetzt prüfen lassen ✅' : 'Löse die Aufgaben auf Papier und schick ein Foto 📸'}</p></div>` : ''}${(() => { const pe = S.exams.filter(x => daysUntil(x.date) < 0 && daysUntil(x.date) >= -45 && !(x.review && x.review.ai)).sort((a, b) => a.date < b.date ? 1 : -1)[0]; return pe ? `<div class="card tip" data-a="go" data-h="back/${pe.id}"><b>📬 ${esc(pe.title)} schon zurück?</b><p>Lade die Arbeit hoch und hol dir Bonus-XP, egal welche Note! 💪</p></div>` : ''; })()}${tip}
 <div class="g2"><button class="btn big" data-a="go" data-h="new">📸 Neues Thema fotografieren</button><button class="btn big sec" data-a="go" data-h="vocab">🃏 Vokabeltrainer</button></div>
 <h2>📅 Nächste Prüfungen</h2>${up.slice(0, 4).map(examCard).join('') || '<p class="muted">Keine Termine eingetragen.</p>'}
 <button class="btn sec sm" data-a="go" data-h="termine">Alle Termine / neuen Termin eintragen</button>
@@ -400,7 +400,7 @@ ${t.photos.length ? '' : '<p class="muted">Fotografiere alle Seiten zu diesem Th
 <div class="thumbs">${t.photos.map(p => `<div class="thumb"><img data-pid="${p}" alt="Foto"><div class="tb"><button data-a="rotPhoto" data-t="${id}" data-p="${p}" aria-label="Drehen">↻</button><button data-a="delPhoto" data-t="${id}" data-p="${p}" aria-label="Löschen">🗑</button></div></div>`).join('')}</div>
 <label class="btn ${t.photos.length ? 'sec' : ''} full">📸 Fotos hinzufügen<input type="file" accept="image/*" multiple class="hide" data-ch="addPhotos" data-t="${id}"></label>
 ${t.photos.length && (!ready || t.dirty) ? `<button class="btn big" style="margin-top:12px" data-a="analyze" data-t="${id}">✨ ${ready ? 'Lernstoff neu erstellen' : 'Lernstoff erstellen'}</button>` : ''}</div>
-${(t.results || []).length ? `<div class="card"><h3>🏁 Deine Ergebnisse</h3>${t.results.slice(-6).reverse().map(r => `<p>${fmtDate(r.d)} · ${r.mode === 'kurz' ? 'Kurztest' : r.mode === 'vokabel' ? 'Vokabeltest' : 'Probearbeit'}: <b>${r.pct} %</b></p>`).join('')}</div>` : ''}
+${(t.results || []).length ? `<div class="card"><h3>🏁 Deine Ergebnisse</h3>${t.results.slice(-6).reverse().map(r => `<p>${fmtDate(r.d)} · ${r.mode === 'kurz' ? 'Kurztest' : r.mode === 'vokabel' ? 'Vokabeltest' : r.mode === 'blatt' ? 'Aufgabenblatt' : 'Probearbeit'}: <b>${r.pct} %</b></p>`).join('')}</div>` : ''}
 <div class="card"><label class="f" style="margin-top:0">Gehört zur Prüfung<select data-ch="setTopicExam" data-t="${id}"><option value="">– keine –</option>${ups.map(x => `<option value="${x.id}" ${t.examId === x.id ? 'selected' : ''}>${esc(x.title)} (${fmtDate(x.date)})</option>`).join('')}</select></label>
 <label class="f">Titel<input value="${esc(t.title)}" data-ch="setTopicTitle" data-t="${id}"></label>
 <button class="btn danger sm" data-a="delTopic" data-t="${id}">Thema löschen</button></div>${nav('home')}`;
@@ -675,14 +675,14 @@ function normRW(x) {
 const stepsHtml = st => `<ol class="steps">${(st || []).map(x => `<li>${esc(String(x).replace(/^\s*(\d+[.)]|Schritt \d+:?)\s*/i, ''))}</li>`).join('')}</ol>`;
 function rwView(t) {
   const rw = t.content.rechenwege || [];
-  if (!rw.length) return `<div class="card center"><div style="font-size:3rem">🧮</div><h3>Rechenwege Schritt für Schritt</h3><p class="muted">Ich erkläre dir jede Rechenart aus diesem Thema mit vorgerechnetem Beispiel und typischen Fehlern – danach kannst du mit echten Aufgaben üben.</p><button class="btn big" data-a="rwGen" data-t="${t.id}">✨ Rechenwege erklären lassen</button></div>`;
-  return `<button class="btn big" style="margin-bottom:16px" data-a="mtStart" data-t="${t.id}" data-i="all">🏋️ Gemischtes Rechentraining (5 Aufgaben)</button>
+  if (!rw.length) return `<div class="card center"><div style="font-size:3rem">🧮</div><h3>Rechenwege Schritt für Schritt</h3><p class="muted">Ich erkläre dir jede Rechenart aus diesem Thema mit vorgerechnetem Beispiel und typischen Fehlern – danach kannst du mit echten Aufgaben üben.</p><button class="btn big" data-a="rwGen" data-t="${t.id}">✨ Rechenwege erklären lassen</button><button class="btn big sec" style="margin-top:12px" data-a="sheetStart" data-t="${t.id}" data-i="all" data-n="6">📄 Direkt ein Aufgabenblatt rechnen</button></div>`;
+  return `<div class="g2" style="margin-bottom:16px"><button class="btn big" data-a="sheetStart" data-t="${t.id}" data-i="all" data-n="6">📄 Aufgabenblatt: auf Papier lösen</button><button class="btn big sec" data-a="mtStart" data-t="${t.id}" data-i="all">🏋️ Am Tablet üben (5 Aufgaben)</button></div>${S.sheet && S.sheet.tid === t.id && !S.sheet.result ? `<button class="btn sec full" style="margin-bottom:16px" data-a="go" data-h="sheet">📄 Zurück zu deinem offenen Aufgabenblatt</button>` : ''}
 ${rw.map((v, i) => `<div class="card"><h2 style="margin-top:0">🧮 ${esc(v.name)}</h2>${v.wann ? `<p class="muted">${esc(v.wann)}</p>` : ''}
 <h3>So gehst du vor</h3>${stepsHtml(v.schritte)}
 ${v.beispiel ? `<div class="example"><h3>👀 Beispiel: ${esc(v.beispiel.aufgabe)}</h3>${stepsHtml(v.beispiel.schritte)}<p><b>Ergebnis: ${esc(v.beispiel.ergebnis)}</b></p></div>` : ''}
 ${v.fehler.length ? `<div class="kv"><span class="l">⚠️ Typische Fehler</span><ul>${v.fehler.map(f => `<li>${esc(f)}</li>`).join('')}</ul></div>` : ''}
 ${v.merke ? `<div class="expl">💡 <b>Merke:</b> ${esc(v.merke)}</div>` : ''}
-<div class="row" style="margin-top:14px"><button class="btn" data-a="mtStart" data-t="${t.id}" data-i="${i}">🏋️ Üben: 5 Aufgaben</button><button class="btn sec" data-a="go" data-h="chat/${t.id}">💬 Frag Beat dazu</button></div></div>`).join('')}
+<div class="row" style="margin-top:14px"><button class="btn" data-a="sheetStart" data-t="${t.id}" data-i="${i}" data-n="6">📄 Aufgabenblatt (6 Aufgaben)</button><button class="btn sec" data-a="mtStart" data-t="${t.id}" data-i="${i}">🏋️ Am Tablet üben</button><button class="btn sec" data-a="go" data-h="chat/${t.id}">💬 Frag Beat dazu</button></div></div>`).join('')}
 <button class="btn sec sm" data-a="rwGen" data-t="${t.id}">🔄 Erklärungen neu erstellen</button>`;
 }
 let MT = null;
@@ -708,19 +708,84 @@ ${r ? `<div class="fb ${r.sterne >= 3 ? 'ok' : r.sterne >= 1 ? 'near' : 'no'}"><
       : `<div class="g2" style="margin-top:14px"><button class="btn big sec" data-a="mtHint" ${MT.hints >= q.tipps.length ? 'disabled' : ''}>💡 Tipp${q.tipps.length ? ` (${q.tipps.length - MT.hints} übrig)` : ''}</button><button class="btn big" data-a="mtCheck">✅ Prüfen</button></div>`}</div>
 ${r ? '' : `<p class="muted center">Wichtig ist der Weg! Für jeden richtigen Schritt gibt's Sterne – auch wenn du dich am Ende verrechnest.</p>`}`;
 };
-async function mtStart(tid, idx) {
-  const t = topic(tid), rw = t.content.rechenwege || [], v = idx === 'all' ? null : rw[+idx];
-  const what = v ? `zum Rechenverfahren „${v.name}“ (So geht's: ${v.schritte.join(' / ')})` : `gemischt zu diesen Rechenarten: ${rw.map(x => x.name).join(', ') || t.title}`;
-  const r = await withLoading(['Ich suche passende Aufgaben aus … 🧮', 'Stimme die Schwierigkeit ab 🎚️'], () => ai([{ text: `Erstelle 5 Übungsaufgaben ${what} für eine Schülerin der 5. Klasse Gymnasium (Niedersachsen), passend zum Thema „${t.title}“. Von leicht nach schwer, Aufgabe 4 und 5 als kurze Sachaufgaben aus dem Alltag (gern Musik, Tanzen, Schule). Zahlen ohne Taschenrechner lösbar. Keine LaTeX-Formeln.
+async function genMathTasks(t, idx, n, focus) {
+  const rw = t.content.rechenwege || [], v = idx === 'all' ? null : rw[+idx];
+  const what = focus ? `– ähnlich zu diesen Aufgaben, bei denen sie noch Fehler gemacht hat (gleiche Rechenart, andere Zahlen): ${focus}` : v ? `zum Rechenverfahren „${v.name}“ (So geht's: ${v.schritte.join(' / ')})` : `gemischt zu diesen Rechenarten: ${rw.map(x => x.name).join(', ') || t.title}`;
+  const r = await withLoading(['Ich suche passende Aufgaben aus … 🧮', 'Stimme die Schwierigkeit ab 🎚️'], () => ai([{ text: `Erstelle ${n} Übungsaufgaben ${what} für eine Schülerin der 5. Klasse Gymnasium (Niedersachsen), passend zum Thema „${t.title}“. Von leicht nach schwer, die letzten ${Math.max(1, Math.round(n / 3))} als kurze Sachaufgaben aus dem Alltag (gern Musik, Tanzen, Schule). Zahlen ohne Taschenrechner lösbar. Jede Aufgabe für sich verständlich und eindeutig lösbar. Keine LaTeX-Formeln.
 Antworte NUR mit JSON: {"aufgaben":[{"aufgabe":"…","tipps":["kleiner Denkanstoß","größerer Tipp, aber nicht die Lösung"],"musterweg":["Schritt 1 mit Zwischenrechnung","Schritt 2 …"],"ergebnis":"Endergebnis mit Einheit"}]}
 
 MATERIAL ZUM THEMA:
 ${(t.content.volltext || '').slice(0, 8000)}` }], { temp: 0.8 }));
-  if (!r) return;
+  if (!r) return null;
   const tasks = (Array.isArray(r.aufgaben) ? r.aufgaben : []).filter(x => x && x.aufgabe && x.ergebnis).map(x => ({ aufgabe: String(x.aufgabe), tipps: arrS(x.tipps), musterweg: arrS(x.musterweg), ergebnis: String(x.ergebnis) }));
-  if (!tasks.length) return modal('<h3>😕 Das hat nicht geklappt</h3><p>Bitte nochmal versuchen.</p>');
-  MT = { tid, idx, title: v ? v.name : 'Gemischtes Training', tasks, i: 0, ans: {}, hints: 0, res: null, stars: [], xp: 0 };
+  if (!tasks.length) { modal('<h3>😕 Das hat nicht geklappt</h3><p>Bitte nochmal versuchen.</p>'); return null; }
+  return { tasks, title: focus ? 'Fehler nochmal üben' : v ? v.name : 'Gemischt' };
+}
+async function mtStart(tid, idx) {
+  const g = await genMathTasks(topic(tid), idx, 5); if (!g) return;
+  MT = { tid, idx, title: g.title === 'Gemischt' ? 'Gemischtes Training' : g.title, tasks: g.tasks, i: 0, ans: {}, hints: 0, res: null, stars: [], xp: 0 };
   go('mtrain');
+}
+
+// ----- Aufgabenblatt: auf Papier lösen, Foto hochladen, KI prüft alles -----
+async function sheetStart(tid, idx, n, focus) {
+  if (S.sheet && !S.sheet.result && S.sheet.photos.length && !confirm('Dein aktuelles Aufgabenblatt ist noch nicht geprüft. Trotzdem ein neues erstellen?')) return;
+  const g = await genMathTasks(topic(tid), idx, n, focus); if (!g) return;
+  S.sheet = { id: uid(), tid, idx, n, title: g.title, tasks: g.tasks, photos: [], hints: {}, result: null, created: todayStr() };
+  save(true); go('sheet'); scrollTo(0, 0);
+}
+V.sheet = () => {
+  const B = S.sheet; if (!B || !topic(B.tid)) return V.home();
+  const t = topic(B.tid), res = B.result;
+  if (res) {
+    const stars = res.items.reduce((s, x) => s + x.sterne, 0), max = B.tasks.length * 3, pct = Math.round(stars / max * 100);
+    const wrong = res.items.map((x, i) => [x, i]).filter(([x]) => x.sterne < 3);
+    return `${back('learn/' + B.tid + '/rw', esc(t.title))}
+<div class="score"><div style="font-size:3rem">${pct >= 85 ? '🏆' : pct >= 60 ? '🌟' : '💪'}</div><h1 style="margin:.2em 0">Aufgabenblatt geprüft!</h1><div class="big">${stars} / ${max} ⭐</div><p style="font-size:1.15rem">${res.items.filter(x => x.sterne === 3).length} von ${B.tasks.length} Aufgaben komplett richtig · +${res.xp} XP</p></div>
+${res.gesamt ? `<div class="card tip">${md(res.gesamt)}</div>` : ''}${res.unleserlich ? `<div class="card res part"><b>📷 Nicht gut lesbar:</b> ${esc(res.unleserlich)}</div>` : ''}
+${B.tasks.map((q, i) => { const x = res.items[i], st = x.sterne >= 3 ? 'ok' : x.sterne >= 1 ? 'part' : 'no'; return `<div class="card res ${st}"><div class="row"><span class="st ${st}">${x.gefunden ? '⭐'.repeat(x.sterne) + '☆'.repeat(3 - x.sterne) : '❓ nicht gefunden'}</span><b>Aufgabe ${i + 1}</b></div>
+<div style="margin-top:8px">${md(q.aufgabe)}</div>
+${x.gefunden ? `<div class="kv"><span class="l">Dein Ergebnis (vom Foto gelesen)</span>${esc(x.ergebnis_schuelerin || '–')}</div>` : ''}
+${x.feedback ? `<div class="fb ${st === 'ok' ? 'ok' : st === 'part' ? 'near' : 'no'}">${esc(x.feedback)}${x.fehler_schritt ? `<p>🔍 <b>Hier ist es passiert:</b> ${esc(x.fehler_schritt)}</p>` : ''}${x.korrektur ? `<p>✏️ <b>So geht der Schritt richtig:</b> ${esc(x.korrektur)}</p>` : ''}</div>` : ''}
+<details ${x.sterne < 3 ? 'open' : ''}><summary><b>👀 So rechnet man es richtig</b></summary>${stepsHtml(q.musterweg)}<p><b>Ergebnis: ${esc(q.ergebnis)}</b></p></details></div>`; }).join('')}
+<div class="g2">${wrong.length ? `<button class="btn big" data-a="sheetFix">🔁 Ähnliche Aufgaben zu meinen Fehlern</button>` : ''}<button class="btn big ${wrong.length ? 'sec' : ''}" data-a="sheetNew">📄 Neues Aufgabenblatt</button></div>
+<button class="btn sec sm" style="margin-top:14px" data-a="sheetRecheck">📷 Fotos ändern &amp; nochmal prüfen</button>${nav('home')}`;
+  }
+  return `${back('learn/' + B.tid + '/rw', esc(t.title))}
+<div class="noprint"><h1>📄 Aufgabenblatt: ${esc(B.title)}</h1>
+<div class="card tip"><b>So geht's:</b><ol style="margin:.4em 0 0"><li>Nimm einen Zettel und schreib zu jeder Aufgabe die <b>Nummer</b> dazu.</li><li>Rechne mit <b>Rechenweg</b> – jeden Schritt aufschreiben.</li><li><b>Ergebnis doppelt unterstreichen.</b></li><li>Wenn du fertig bist: Zettel fotografieren und prüfen lassen. 📸</li></ol></div></div>
+<div class="card sheet"><h2 class="printonly">${esc(t.title)} – ${esc(B.title)}</h2>${B.tasks.map((q, i) => `<div class="sq"><div class="sn">${i + 1}</div><div class="grow"><div style="font-size:1.15rem">${md(q.aufgabe)}</div>
+${(B.hints[i] || 0) ? `<div class="expl noprint">${q.tipps.slice(0, B.hints[i]).map((h, k) => `<p>💡 <b>Tipp ${k + 1}:</b> ${esc(h)}</p>`).join('')}</div>` : ''}
+${q.tipps.length > (B.hints[i] || 0) ? `<button class="btn sec sm noprint" style="margin-top:8px" data-a="sheetHint" data-i="${i}">💡 Tipp</button>` : ''}</div></div>`).join('')}</div>
+<div class="row noprint" style="margin-bottom:16px"><button class="btn sec sm" data-a="print">🖨️ Blatt drucken</button></div>
+<div class="card noprint"><h3>📸 Deine Lösung fotografieren</h3><p class="muted">Ganzen Zettel gerade von oben, gut beleuchtet. Mehrere Seiten? Einfach mehrere Fotos.</p>
+<div class="thumbs">${B.photos.map(p => `<div class="thumb"><img data-pid="${p}" alt="Foto"><div class="tb"><button data-a="sheetRot" data-p="${p}">↻</button><button data-a="sheetDel" data-p="${p}">🗑</button></div></div>`).join('')}</div>
+<label class="btn ${B.photos.length ? 'sec' : ''} full">📸 ${B.photos.length ? 'Weiteres Foto hinzufügen' : 'Lösung fotografieren'}<input type="file" accept="image/*" multiple class="hide" data-ch="sheetPhotos"></label>
+${B.photos.length ? `<button class="btn big" style="margin-top:12px" data-a="sheetCheck">✅ Blatt prüfen lassen</button>` : ''}</div>${nav('home')}`;
+};
+async function sheetCheck() {
+  const B = S.sheet; if (!B.photos.length) return toast('Bitte zuerst deine Lösung fotografieren 📸');
+  const parts = [{ text: `Eine Fünftklässlerin hat dieses Aufgabenblatt auf Papier gelöst. Auf den Fotos steht ihre handschriftliche Lösung (Aufgabennummer, Rechenweg, Ergebnis – meist doppelt unterstrichen). Prüfe JEDE Aufgabe: freundlich, genau und ermutigend. Andere richtige Lösungswege sind genauso gut. Finde bei Fehlern den ersten fehlerhaften Schritt. Ignoriere Namen oder persönliche Daten.
+sterne: 3 = Weg und Ergebnis richtig; 2 = Weg richtig, aber kleiner Rechen-/Flüchtigkeitsfehler oder Einheit fehlt; 1 = Ansatz richtig, aber deutliche Fehler; 0 = falsch oder kein Weg erkennbar. Findest du eine Aufgabe auf den Fotos nicht: gefunden=false, sterne=0.
+
+AUFGABEN:
+${B.tasks.map((q, i) => `Nr. ${i + 1}: ${q.aufgabe}\n   Musterweg: ${q.musterweg.join(' | ')}\n   Richtiges Ergebnis: ${q.ergebnis}`).join('\n')}
+
+Antworte NUR mit JSON: {"aufgaben":[{"nr":1,"gefunden":true,"ergebnis_schuelerin":"was sie als Ergebnis geschrieben hat","sterne":3,"feedback":"1–2 freundliche Sätze","fehler_schritt":"welcher Schritt falsch ist (sonst leer)","korrektur":"wie dieser Schritt richtig geht (sonst leer)"}],"gesamt":"2–3 Sätze Fazit: was schon richtig gut klappt und worauf sie als Nächstes achten soll","unleserlich":"was auf den Fotos nicht lesbar war (sonst leer)"}` }];
+  for (const id of B.photos) { const p = await getPhoto(id); if (p) parts.push({ inlineData: { mimeType: 'image/jpeg', data: p.split(',')[1] } }); }
+  const r = await withLoading(['Ich lese deinen Zettel … 👀', 'Prüfe jede Aufgabe 🔍', 'Verteile die Sterne ⭐'], () => ai(parts, { temp: 0.2 }));
+  if (!r) return;
+  const list = Array.isArray(r.aufgaben) ? r.aufgaben : [];
+  const items = B.tasks.map((q, i) => { const x = list.find(y => +y.nr === i + 1) || list[i] || {}; const found = x.gefunden !== false && Object.keys(x).length > 0; return { gefunden: found, sterne: found ? clamp(Math.round(+x.sterne || 0), 0, 3) : 0, ergebnis_schuelerin: String(x.ergebnis_schuelerin || ''), feedback: String(x.feedback || (found ? '' : 'Diese Aufgabe habe ich auf deinem Foto nicht gefunden. Steht die Nummer dabei?')), fehler_schritt: String(x.fehler_schritt || ''), korrektur: String(x.korrektur || '') }; });
+  const stars = items.reduce((s, x) => s + x.sterne, 0), perfect = items.filter(x => x.sterne === 3).length;
+  const first = !B.result && !B.xpGiven, xp = first ? stars * 3 + 15 : 0;
+  B.result = { items, gesamt: String(r.gesamt || ''), unleserlich: String(r.unleserlich || ''), xp: first ? xp : (B.lastXp || 0) };
+  if (first) {
+    B.xpGiven = true; B.lastXp = xp; S.stats.stars3 = (S.stats.stars3 || 0) + perfect;
+    const t = topic(B.tid); if (t) (t.results = t.results || []).push({ d: todayStr(), mode: 'blatt', pct: Math.round(stars / (B.tasks.length * 3) * 100) });
+    touchStreak(); addXP(xp);
+  }
+  checkBadges(); save(true); if (stars >= B.tasks.length * 2.5) confetti(); render(); scrollTo(0, 0);
 }
 async function mtCheck() {
   const q = MT.tasks[MT.i], a = MT.ans;
@@ -910,6 +975,15 @@ ${(t.content.volltext || '').slice(0, 30000)}` }], { temp: 0.3 }));
     t.content.rechenwege = rw; save(true); render();
   },
   mtStart: d => mtStart(d.t, d.i),
+  sheetStart: d => sheetStart(d.t, d.i, +(d.n || 6)),
+  sheetHint(d) { const B = S.sheet; B.hints[d.i] = (B.hints[d.i] || 0) + 1; save(); render(); },
+  print: () => window.print(),
+  async sheetRot(d) { const n = await rotateData(await getPhoto(d.p)); PH.set(d.p, n); await DB.set('p:' + d.p, n); render(); },
+  async sheetDel(d) { if (!confirm('Foto löschen?')) return; const B = S.sheet; B.photos = B.photos.filter(p => p !== d.p); PH.delete(d.p); await DB.del('p:' + d.p); save(); render(); },
+  sheetCheck: () => sheetCheck(),
+  sheetRecheck() { S.sheet.result = null; save(); render(); },
+  sheetNew() { const B = S.sheet; sheetStart(B.tid, B.idx, B.n || 6); },
+  sheetFix() { const B = S.sheet, w = B.tasks.filter((q, i) => B.result.items[i].sterne < 3).map(q => q.aufgabe).join(' || '); sheetStart(B.tid, B.idx, Math.min(8, Math.max(4, B.tasks.length)), w); },
   mtHint() { MT.hints++; render(); },
   mtCheck: () => mtCheck(),
   mtNext() { MT.i++; MT.ans = {}; MT.hints = 0; MT.res = null; if (MT.i >= MT.tasks.length) { S.xp += 10; MT.xp += 10; toast(`+${MT.xp} XP ✨`); checkBadges(); save(); } render(); scrollTo(0, 0); },
@@ -929,7 +1003,7 @@ ${(t.content.volltext || '').slice(0, 30000)}` }], { temp: 0.3 }));
     Object.keys(S.vocab).forEach(k => { if (k.startsWith(t.id + '|')) delete S.vocab[k]; });
     Object.keys(S.expl).forEach(k => { if (k.startsWith(t.id + ':')) delete S.expl[k]; });
     if (CARD && CARD.tid === t.id) CARD = null;
-    delete S.chats[t.id];
+    delete S.chats[t.id]; if (S.sheet && S.sheet.tid === t.id) S.sheet = null;
     save(true); toast('🗑 Thema gelöscht'); go(back);
   },
   delExam(d) { if (!confirm('Termin wirklich löschen? (Die Themen bleiben erhalten.)')) return; const ex = examById(d.id); ((ex && ex.review && ex.review.photos) || []).forEach(p => { PH.delete(p); DB.del('p:' + p).catch(() => { }); }); S.exams = S.exams.filter(e => e.id !== d.id); S.topics.forEach(t => { if (t.examId === d.id) t.examId = ''; }); save(); go('termine'); },
@@ -1007,6 +1081,11 @@ const CH = {
   async rvPhotos(el) {
     const rv = rvOf(examById(el.dataset.e)), files = [...el.files]; if (!files.length) return;
     await withLoading(['Bereite die Fotos vor … 📸'], async () => { for (const f of files) { const d = await resize(f), id = uid(); await DB.set('p:' + id, d); PH.set(id, d); rv.photos.push(id); } });
+    save(true); render();
+  },
+  async sheetPhotos(el) {
+    const B = S.sheet, files = [...el.files]; if (!files.length || !B) return;
+    await withLoading(['Bereite die Fotos vor … 📸'], async () => { for (const f of files) { const d = await resize(f, 1800), id = uid(); await DB.set('p:' + id, d); PH.set(id, d); B.photos.push(id); } });
     save(true); render();
   },
   async mtPhoto(el) { const f = el.files[0]; if (!f || !MT) return; MT.ans.photo = await resize(f, 1400); render(); },

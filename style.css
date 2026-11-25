@@ -161,3 +161,10 @@ input.gap{display:inline-block;width:190px;max-width:100%;padding:6px 10px;margi
 .example{background:color-mix(in srgb,var(--a) 7%,var(--card));border:2px dashed color-mix(in srgb,var(--a) 35%,transparent);border-radius:18px;padding:14px 18px;margin:14px 0}
 textarea.mathin{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:1.15rem;line-height:1.6;min-height:150px}
 details summary{cursor:pointer;font-size:1.05rem;padding:4px 0}
+
+.sheet .sq{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}
+.sheet .sq:last-child{border-bottom:0}
+.sheet .sn{flex:none;width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,var(--a),var(--b));color:#fff;display:grid;place-items:center;font-weight:900;font-size:1.2rem}
+.sheet .grow{flex:1;min-width:0}
+.printonly{display:none}
+@media print{.nav,.noprint,.back,#toast{display:none!important}body{background:#fff;color:#000}.card{box-shadow:none;border:0}.printonly{display:block}.sheet .sn{background:none;color:#000;border:2px solid #000}.sheet .sq{padding:18px 0 90px}}
